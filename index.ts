@@ -1,21 +1,18 @@
 import express from 'express';
-export interface IServerConfig
-{
-    port: number,
-}
+import { NextHandleFunction } from 'connect';
 export type Request = express.Request;
 export type Response = express.Response;
 
 export class RouterBase
 {
-    constructor(public Path: string)
+    constructor(public path: string)
     {
     }
     GetPriority()
     {
         return 0;
     }
-    GetRow(): null | express.Router
+    GetRow(): null | express.Router | NextHandleFunction
     {
         return null;
     }
@@ -42,7 +39,7 @@ export function DefineRouter(path: string)
 
 const server = {
     routers: Array<RouterBase>(),
-    StartServer(config: IServerConfig = { port: 8080 })
+    StartServer(port = 8080)
     {
         this.routers.sort((a, b) =>
         {
@@ -56,16 +53,15 @@ const server = {
             }
             else {
                 const r = express.Router();
-                r.get(router.Path, router.Get);
-                r.post(router.Path, router.Post);
+                r.get(router.path, router.Get.bind(router));
+                r.post(router.path, router.Post.bind(router));
                 app.use(r);
             }
-            console.log(`Loading Router: ${router.constructor.name}`);
+            console.log(`Loaded Router: ${router.constructor.name}`);
         }
-        console.clear();
-        const server = app.listen(config.port, () =>
+        const server = app.listen(port, () =>
         {
-            console.info(`Server started running at : http://localhost:${config.port}`);
+            console.info(`Server started running at : http://localhost:${port}`);
         });
         process.on('SIGINT', () =>
         {

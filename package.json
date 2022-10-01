@@ -1,10 +1,13 @@
 {
   "name": "lingdarserver",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "",
   "main": "build/index.js",
+  "repository": "https://github.com/LingDar77/LingDarServer.git",
+  "types": "./build/types/index.d.ts",
   "scripts": {
-    "test": "tsc --project ./ && node ./build/demoServer.js"
+    "test": "tsc --project ./ && node ./build/demoServer.js",
+    "build": "tsc --project ./"
   },
   "keywords": [
     "server",
