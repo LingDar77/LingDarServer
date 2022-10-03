@@ -26,6 +26,12 @@ export class LRUCache<Key, Value>
 
         }
     }
+
+    Clear()
+    {
+        this.cache.clear();
+    }
+
     Get(key: Key)
     {
         const val = this.cache.get(key);
@@ -36,24 +42,28 @@ export class LRUCache<Key, Value>
         }
 
     }
+
     Size()
     {
         return this.cache.size;
     }
+
     [Symbol.iterator]()
     {
         return this.cache[Symbol.iterator]();
     }
+
     Pop()
     {
-        let key = this.cache.keys().next().value;
-        let val = this.cache.get(key);
+        const key = this.cache.keys().next().value;
+        const val = this.cache.get(key);
         if (key) {
             this.cache.delete(key);
             return { key: key, val: val };
         }
 
     }
+
     Remove(key: Key)
     {
         this.cache.delete(key);

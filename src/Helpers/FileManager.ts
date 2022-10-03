@@ -13,60 +13,77 @@ export interface IFileManagerConfig
 {
     cacheCheckTime: number;
     cacheMaxSize: number;
-
+    cacheLastTime: number;
 }
 
 export interface IFileCache
 {
-    conctent: Buffer,
-    modifiedTime: Date
+    conctent: Buffer;
+    modifiedTime: Date;
+
 }
 
 export class FileManager
 {
     private caches;
     private timer;
+    private lastTime;
+    private totalTime;
+    private checkTime;
+    private info = { cacheSize: 0, caches: 0 };
 
-    constructor(private config: IFileManagerConfig = { cacheCheckTime: 10000, cacheMaxSize: 512 })
+    constructor(private config: IFileManagerConfig = { cacheCheckTime: 10000, cacheMaxSize: 512, cacheLastTime: 60000 })
     {
         this.caches = new LRUCache<string, IFileCache>();
+        this.checkTime = config.cacheCheckTime;
+        this.totalTime = config.cacheLastTime;
         this.timer = setInterval(this._checkCaches.bind(this), config.cacheCheckTime);
+        this.lastTime = config.cacheLastTime;
     }
 
     private _checkCaches()
     {
-        let size = 0;
-        for (const item of this.caches) {
-            size = + item[1].conctent.length;
-        }
-        size /= 1024 * 1024;
-        console.clear();
-        console.log(`current cached ${this.caches.Size()} files\nmemory used: ${size} MB`);
+        if (this.lastTime > 0) {
+            let size = 0;
+            for (const item of this.caches) size = + item[1].conctent.length;
+            size /= 1024 * 1024;
 
-        while (size >= this.config.cacheMaxSize) {
-            const cache = this.caches.Pop();
-            if (cache?.val) {
-                let freeSize = cache.val?.conctent.length;
-                freeSize /= 1024 * 1024;
-                size -= freeSize;
-                console.log(`releasing cache: ${cache.key}, sizing: ${freeSize} MB`);
+            this.info.cacheSize = size;
+            this.info.caches = this.caches.Size();
+
+            while (size >= this.config.cacheMaxSize) {
+                const cache = this.caches.Pop();
+                if (cache?.val) {
+                    let freeSize = cache.val?.conctent.length;
+                    freeSize /= 1024 * 1024;
+                    size -= freeSize;
+                    console.log(`releasing cache: ${cache.key}, sizing: ${freeSize} MB`);
+                }
             }
-        }
-        for (const cache of this.caches) {
-            fs.stat(cache[0])
-                .then(stats =>
-                {
-                    if (stats.mtime.getDate() != cache[1].modifiedTime.getDate()) {
+
+            for (const cache of this.caches) {
+                fs.stat(cache[0])
+                    .then(stats =>
+                    {
+                        if (stats.mtime.getDate() != cache[1].modifiedTime.getDate()) {
+                            this.caches.Remove(cache[0]);
+                            console.log(`file:${cache[0]} has been expired`);
+                        }
+                    })
+                    .catch(() =>
+                    {
                         this.caches.Remove(cache[0]);
                         console.log(`file:${cache[0]} has been expired`);
-                    }
-                })
-                .catch(err =>
-                {
-                    this.caches.Remove(cache[0]);
-                    console.log(`file:${cache[0]} has been expired`);
-                });
+                    });
+            }
+
+            this.lastTime -= this.checkTime;
+            if (this.lastTime <= 0) {
+                //consider clear all caches
+                this.caches.Clear();
+            }
         }
+
     }
 
     ResetCacheTimer(cacheCheckTime: 10000)
@@ -80,7 +97,7 @@ export class FileManager
     {
         return new Promise((resovle, reject) =>
         {
-            let cache = this.caches.Get(path);
+            const cache = this.caches.Get(path);
             if (cache && (!version || version == cache?.modifiedTime.getTime())) {
                 //cache hit 
                 target.write(cache.conctent, err =>
@@ -89,6 +106,7 @@ export class FileManager
                         reject(err);
                     else {
                         if (cache) {
+                            this.lastTime = this.totalTime;
                             resovle(cache.modifiedTime);
                         }
                     }
@@ -100,11 +118,12 @@ export class FileManager
                 fs.stat(path)
                     .then(async (stats) =>
                     {
-                        let data = await fs.readFile(path);
+                        const data = await fs.readFile(path);
                         this.caches.Set(path, { conctent: data, modifiedTime: stats.mtime });
                         target.write(data, err =>
                         {
                             if (!err) {
+                                this.lastTime = this.totalTime;
                                 resovle(stats.mtime);
                             }
                             else {
