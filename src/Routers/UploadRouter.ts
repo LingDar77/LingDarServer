@@ -9,6 +9,7 @@ export class UploadProgressRouter extends RouterBase
 export class UploadRouter extends RouterBase
 {
     private cacheMan: undefined | CacheManager;
+    cacheStrategy: (fname: string) => boolean = () => false;
 
     GetPriority(): number
     {
@@ -21,9 +22,9 @@ export class UploadRouter extends RouterBase
         return this;
     }
 
-    CacheStrategy()
+    CacheStrategy(strategy: (fname: string) => boolean)
     {
-        
+        this.cacheStrategy = strategy;
     }
 
     Post(request: Request, response: Response, next: () => void): void
@@ -31,6 +32,7 @@ export class UploadRouter extends RouterBase
         const parts = request.headers['content-type']?.split(';');
         const boudary = '--' + parts?.at(1)?.split('=')[1];
         const contentType = parts?.at(0);
+        response.type('application/json');
         if (contentType == 'multipart/form-data') {
             let buffer = Buffer.alloc(0);
             request.on('data', data =>
@@ -43,11 +45,11 @@ export class UploadRouter extends RouterBase
 
                 items.pop();
                 items.shift();
-
+                const res = {};
                 for (const item of items) {
                     const i = item.indexOf('\r\n\r\n');
                     const head = item.slice(0, i);
-                    const body = item.slice(i + 4);
+                    const body = item.slice(i + 4, -2);
                     const parts = head.split('; ');
                     const name = parts[1].split('=')[1].slice(1, -1);
                     let fname = parts[2] ? parts[2].split('=')[1].split('\r\n')[0].slice(1, -1) : parts[2];
@@ -59,13 +61,13 @@ export class UploadRouter extends RouterBase
                         //start handle uploading, send an upload id to client
                         //this id can be used to query the progress of this upload
                         if (this.cacheMan) {
-                            const path = await this.cacheMan.CachePersistent(Buffer.from(body.slice(0, -2)), fname);
-                            response.write(JSON.stringify({ path }));
+                            const path = await this.cacheMan.CacheFile(Buffer.from(body, 'binary'), fname, this.cacheStrategy(fname));
+                            res[fname as keyof typeof res] = path as never;
                         }
                     }
                 }
 
-                response.end();
+                response.end(JSON.stringify(res));
 
             });
         }
@@ -74,4 +76,5 @@ export class UploadRouter extends RouterBase
         }
 
     }
+    
 }

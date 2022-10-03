@@ -9,27 +9,40 @@ export type Response = express.Response;
 
 export class RouterBase
 {
+
     constructor(public path: string)
     {
     }
+
     GetPriority()
     {
         return 0;
     }
+
     GetRow(): null | express.Router | NextHandleFunction
     {
         return null;
     }
+
     Get(request: Request, response: Response, next: () => void)
     {
         next();
     }
+
     Post(request: Request, response: Response, next: () => void)
     {
         next();
     }
-    OnLoad() { }
 
+    OnLoad()
+    {
+
+    }
+
+    OnDestory()
+    {
+
+    }
 
 }
 
@@ -44,31 +57,8 @@ export function DefineRouter(path: string)
 
 const server = {
     routers: Array<RouterBase>(),
-    StartServer(port = 8080, watch = true)
+    StartServer(onClose: () => void, port = 8080, watch = true)
     {
-        console.clear();
-        if (watch) {
-            (async () =>
-            {
-                const watcher = fs.watch(__dirname, { recursive: true });
-                const response = debounce(() =>
-                {
-                    process.addListener('exit', () =>
-                    {
-                        spawnSync('node', [process.argv[1]], { stdio: 'inherit', shell: true });
-                    });
-                    console.clear();
-                    console.log('Changes detected, server restarting...');
-                    server.close();
-                    process.exit();
-                }, 200);
-
-                for await (const event of watcher) {
-                    response(event);
-                }
-
-            })();
-        }
 
         this.routers.sort((a, b) =>
         {
@@ -95,13 +85,40 @@ const server = {
             console.info(`Server started running at: http://localhost:${port}`);
         });
 
-        process.on('SIGINT', () =>
+        console.clear();
+        if (watch) {
+            (async () =>
+            {
+                const watcher = fs.watch(__dirname, { recursive: true });
+                const response = debounce(() =>
+                {
+                    process.addListener('exit', () =>
+                    {
+                        spawnSync('node', [process.argv[1]], { stdio: 'inherit', shell: true });
+                    });
+                    console.clear();
+                    console.log('Changes detected, server restarting...');
+                    process.emit('SIGINT');
+                }, 200);
+
+                for await (const event of watcher) {
+                    response(event);
+                }
+
+            })();
+        }
+        const close = () =>
         {
+            onClose();
             console.log('Exiting server...');
+            for (const router of this.routers) {
+                router.OnDestory();
+            }
             server.close();
             process.exit();
-        });
+        };
 
+        process.on('SIGINT', close);
     }
 };
 

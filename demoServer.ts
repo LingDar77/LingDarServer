@@ -9,7 +9,7 @@ import zlib from 'zlib';
 import { CacheManager } from './src/Helpers/CacheManager';
 
 const fm = new FileManager();
-const cm = new CacheManager({ persistentDir: 'C:/Cache/LDServerCache', tempDir: 'C:/Cache/LDServerCachetemp' });
+const cm = new CacheManager({ persistentDir: 'C:/Cache/LDServerCache', tempDir: 'C:/Cache/LDServerCacheTemp', maxTempSize: 4096 });
 
 @DefineRouter('/api/test1')
 class testRouter extends RouterBase
@@ -53,7 +53,7 @@ server.routers.push(new StaticRouter('/*')
 );
 
 server.routers.push(new StaticRouter('/temp/*')
-    .Dir('C:/Cache/LDServerCachetemp')
+    .Dir('C:/Cache/LDServerCacheTemp')
     .FileManager(fm)
     .CacheStrategy(ECacheStrategy.LastModified)
 );
@@ -67,4 +67,7 @@ server.routers.push(new StaticRouter('/cache/*')
 server.routers.push(new UploadRouter('/api/upload')
     .CacheManager(cm));
 
-server.StartServer();
+server.StartServer(() =>
+{
+    cm.Destory();
+});

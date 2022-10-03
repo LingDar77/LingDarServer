@@ -1,11 +1,13 @@
 /* eslint-disable no-empty */
 import { promises as fs } from 'fs';
+import sfs from 'fs';
 import LRUCache from './LRUCache';
 import Path from 'path';
 import crypto from 'crypto';
 
 export interface ICacheManagerConfig
 {
+    maxTempSize: number;
     tempDir: string;
     persistentDir: string;
 
@@ -20,7 +22,7 @@ export class CacheManager
     private temps = new LRUCache<string, string>();
     private persistents = new Map<string, string>();
 
-    constructor(private config: ICacheManagerConfig = { tempDir: '../Cache/temp', persistentDir: '../Cache' })
+    constructor(private config: ICacheManagerConfig)
     {
         this.LoadPersistents();
         fs.access(config.persistentDir)
@@ -33,63 +35,96 @@ export class CacheManager
             {
                 fs.mkdir(config.tempDir);
             });
-        process.on('exit', () =>
-        {
-            //clear temp files
-            fs.unlink(config.tempDir);
-        });
     }
 
-    private async LoadPersistents()
+    private LoadPersistents()
     {
         fs.readFile(Path.join(this.config.persistentDir, 'persistents.json'))
-            .then(buffer =>
+            .then(buf =>
             {
-                //
+                this.persistents = JSON.parse(buf.toString(), (key, value) =>
+                {
+                    if (typeof value === 'object' && value !== null) {
+                        if (value.dataType === 'Map') {
+                            return new Map(value.value);
+                        }
+                    }
+                    return value;
+                });
+
             })
-            .catch(err =>
-            {
-                console.error(err);
-            });
+            .catch(() => { });
 
     }
 
-    async CacheTemp(bufer: Buffer, name: string)
+    Destory()
     {
-        //
+        if (this.temps.Size())
+            sfs.rmdirSync(this.config.tempDir, { recursive: true });
+        //record persistents map
+        if (this.persistents.size) {
+            const json = JSON.stringify(this.persistents,
+                (key, value) =>
+                {
+                    if (value instanceof Map) {
+                        return {
+                            dataType: 'Map',
+                            value: Array.from(value.entries()), // or with spread: value: [...value]
+                        };
+                    } else {
+                        return value;
+                    }
+                });
+            sfs.writeFileSync(Path.join(this.config.persistentDir, 'persistents.json'), json);
+        }
     }
 
-    async CachePersistent(bufer: Buffer, name: string): Promise<string>
+    async CacheFile(buffer: Buffer, name: string, persistent = false): Promise<string>
     {
         return new Promise((resolve, reject) =>
         {
+            const [source, get, set, dir] =
+                persistent ?
+                    [this.persistents, this.persistents.get.bind(this.persistents), this.persistents.set.bind(this.persistents), this.config.persistentDir] :
+                    [this.temps, this.temps.Get.bind(this.temps), this.temps.Set.bind(this.temps), this.config.tempDir];
             const hash = crypto.createHash('sha256');
-            hash.update(bufer);
+            hash.update(buffer);
             const sha256 = hash.digest('hex');
-            this.QuerySha256(sha256).then(result =>
-            {
-                if (result) {
-                    //already uploaded
-                    const val = this.persistents.get(sha256);
-                    if (val)
-                        resolve(val);
-                    else
-                        reject();
-                }
-                else {
-
-                }
-            });
-
-            resolve(name);
+            this.QuerySha256(sha256, source)
+                .then(result =>
+                {
+                    if (result) {
+                        //already uploaded
+                        const val = get(sha256);
+                        if (val)
+                            resolve(val);
+                        else
+                            reject();
+                    }
+                    else {
+                        const pref = crypto.randomBytes(12).toString('hex');
+                        const suff = name.split('.').pop();
+                        name = pref + '.' + suff;
+                        set(sha256, name);
+                        fs.writeFile(Path.join(dir, name), buffer, 'binary');
+                        resolve(name);
+                    }
+                });
         });
     }
 
-    async QuerySha256(hash: string)
+    async ClearPersistents()
+    {
+        this.persistents.clear();
+        sfs.rmdirSync(this.config.persistentDir);
+        fs.mkdir(this.config.persistentDir);
+    }
+
+    async QuerySha256(hash: string, source: Iterable<[string, string]>)
     {
         return new Promise<boolean>((resolve) =>
         {
-            for (const item of this.persistents) {
+            for (const item of source) {
                 if (item[0] == hash) {
                     resolve(true);
                     return;
@@ -99,4 +134,5 @@ export class CacheManager
         });
 
     }
+
 }
