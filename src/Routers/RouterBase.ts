@@ -7,7 +7,10 @@ export class ServerResponse extends http.ServerResponse
 
 export class Request extends http.IncomingMessage
 {
-    params: {[x:string]:string} = {};
+    getParams: {[x:string]:string} = {};
+    postParams: {[x:string]:string} = {};
+    formParams: {[x:string]:string} = {};
+    files:{[x:string]:Promise<string>}={};
     path = '';
 }
 

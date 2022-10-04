@@ -1,16 +1,17 @@
 /* eslint-disable no-empty */
-import { promises as fs } from 'fs';
+import { promises as fs} from 'fs';
 import sfs from 'fs';
 import LRUCache from './LRUCache';
 import Path from 'path';
 import crypto from 'crypto';
+import { clearInterval } from 'timers';
 
 export interface ICacheManagerConfig
 {
-    maxTempSize: number;
+    maxTempSize?: number;
     tempDir: string;
     persistentDir: string;
-
+    checkTime?:number
 }
 
 /**
@@ -21,6 +22,7 @@ export class CacheManager
 
     private temps = new LRUCache<string, string>();
     private persistents = new Map<string, string>();
+    private timer;
 
     constructor(private config: ICacheManagerConfig)
     {
@@ -35,6 +37,7 @@ export class CacheManager
             {
                 fs.mkdir(config.tempDir);
             });
+        this.timer = setInterval(this.Check.bind(this), config.checkTime ?? 2000);
     }
 
     private LoadPersistents()
@@ -57,10 +60,50 @@ export class CacheManager
 
     }
 
+    Check()
+    {
+        {
+
+            fs.readdir(this.config.tempDir)
+                .then(async files=> {
+                    let size = 0;
+                    const sizeMap = new Map<string, number>();
+                    for(const file of files)
+                    {
+                        await fs.stat(Path.join(this.config.tempDir, file))
+                            .then(stats=>{
+                                size += stats.size;
+                                sizeMap.set(file, stats.size);
+                            });
+                    }
+                    const max = (this.config.maxTempSize ?? 1024) * 1014 * 1024;
+                    while(size > max)
+                    {
+                        const file = this.temps.Pop();
+                        
+                        if(file?.val)
+                        {
+                            const fsize = sizeMap.get(file.val);
+                            await fs.rm(Path.join(this.config.tempDir, file.val), {recursive:true});
+                            size -= fsize ?? 0;
+                        }
+                        else
+                        {
+                            await fs.rm(this.config.tempDir, {recursive:true});
+                            await fs.mkdir(this.config.tempDir);
+                            return;
+                        }
+                    }
+                    
+                });
+            
+        }
+    }
+
     Destory()
     {
-        if (this.temps.Size())
-            sfs.rmdirSync(this.config.tempDir, { recursive: true });
+        clearInterval(this.timer);
+        sfs.rmdirSync(this.config.tempDir, { recursive:true });
         //record persistents map
         if (this.persistents.size) {
             const json = JSON.stringify(this.persistents,
@@ -77,6 +120,12 @@ export class CacheManager
                 });
             sfs.writeFileSync(Path.join(this.config.persistentDir, 'persistents.json'), json);
         }
+    }
+
+    ResetTimer(time:number)
+    {
+        this.config.checkTime = time;
+        this.timer = setInterval(this.Check.bind(this), time);
     }
 
     async CacheFile(buffer: Buffer, name: string, persistent = false): Promise<string>

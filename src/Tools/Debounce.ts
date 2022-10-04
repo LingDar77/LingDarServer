@@ -1,7 +1,7 @@
-export function debounce(f: (...args: any[]) => void, threshold = 1000)
+export function debounce(f: (...args: unknown[]) => void, threshold = 1000)
 {
     let timer: NodeJS.Timeout;
-    return (...args: any[]) =>
+    return (...args: unknown[]) =>
     {
         
         if (timer)
@@ -10,5 +10,5 @@ export function debounce(f: (...args: any[]) => void, threshold = 1000)
         {
             f(...args);
         }, threshold);
-    }
+    };
 }

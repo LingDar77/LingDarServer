@@ -131,6 +131,7 @@ import { RouterBase } from './src/Routers/RouterBase';
 import { spawnSync } from 'child_process';
 import { debounce } from './src/Tools/Debounce';
 import { promises as fs } from 'fs';
+import { CacheManager } from './src/Helpers/CacheManager';
 
 export function DefineRouter(pattern:RegExp)
 {
@@ -143,9 +144,9 @@ export function DefineRouter(pattern:RegExp)
 const app = {
     routers : new Array<RouterBase>(),
     onClose: ()=>{},
-    StartServer(protocol:'http' | 'https' = 'http', port = 8080, options:ServerOptions = {})
+    StartServer(cacheMan:CacheManager, protocol:'http' | 'https' = 'http', port = 8080, options:ServerOptions = {})
     {
-        const server = new Server(protocol);
+        const server = new Server(protocol, cacheMan);
         server.routers = this.routers;
         server.routers.sort((a, b) =>
         {
@@ -174,6 +175,7 @@ const app = {
             }, 200);
             
             process.on('SIGINT', ()=>{
+                this.onClose();
                 instance.server?.close();
                 process.exit();
             });

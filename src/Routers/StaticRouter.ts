@@ -51,14 +51,6 @@ export class StaticRouter extends RouterBase
     {
         const path = request.path;
 
-        // let cnt = 0;
-        // for (let i = 0; i != this.path.length; ++i) {
-        //     if (this.path[i] != '*') {
-        //         cnt++;
-        //     }
-        //     else break;
-        // }
-        // path = path.slice(cnt);
         const finalPath = Path.join(this.dir, path == '/' ? 'index.html' : path);
 
         switch (this.cacheStratgy) {
