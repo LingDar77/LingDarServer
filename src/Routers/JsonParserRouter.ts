@@ -1,21 +1,21 @@
-import { DefineRouter, RouterBase } from "../../index";
-import express from 'express';
-import { NextHandleFunction } from 'connect';
+// import { DefineRouter, RouterBase } from '../../index';
+// import express from 'express';
+// import { NextHandleFunction } from 'connect';
 
-@DefineRouter('/*')
-class JsonPaserRouter extends RouterBase
-{
-    GetRow(): null | express.Router | NextHandleFunction
-    {
-        return express.json();
-    }
-}
+// @DefineRouter('/*')
+// class JsonPaserRouter extends RouterBase
+// {
+//     GetRow(): null | express.Router | NextHandleFunction
+//     {
+//         return express.json();
+//     }
+// }
 
-@DefineRouter('/*')
-class URLEncodedRouter extends RouterBase
-{
-    GetRow(): null | express.Router | NextHandleFunction
-    {
-        return express.urlencoded({ extended: false });
-    }
-}
+// @DefineRouter('/*')
+// class URLEncodedRouter extends RouterBase
+// {
+//     GetRow(): null | express.Router | NextHandleFunction
+//     {
+//         return express.urlencoded({ extended: false });
+//     }
+// }

@@ -1,7 +1,7 @@
-import { Request, Response, RouterBase } from "../../index";
+import { Request, Response, RouterBase,ServerResponse } from './RouterBase';
 import { Transform } from 'stream';
-import { FileManager } from '../Helpers/FileManager'
-import { promises as fs } from 'fs'
+import { FileManager } from '../Helpers/FileManager';
+import { promises as fs } from 'fs';
 import Path from 'path';
 import { Writable } from 'stream';
 
@@ -18,7 +18,7 @@ export class StaticRouter extends RouterBase
     private fileMan: undefined | FileManager;
     private cacheStratgy = ECacheStrategy.None;
 
-    Dir(dir: string = './')
+    Dir(dir = './')
     {
         this.dir = dir;
         return this;
@@ -29,7 +29,7 @@ export class StaticRouter extends RouterBase
         this.filter = filter;
         return this;
     }
-    
+
     FileManager(fm?: FileManager)
     {
         this.fileMan = fm;
@@ -49,42 +49,46 @@ export class StaticRouter extends RouterBase
 
     Get(request: Request, response: Response, next: () => void): void
     {
-        let path = request.path;
-        let cnt = 0;
-        for (let i = 0; i != this.path.length; ++i) {
-            if (this.path[i] != '*') {
-                cnt++;
-            }
-            else break;
-        }
-        path = path.slice(cnt);
-        let finalPath = Path.join(this.dir, path == '' ? 'index.html' : path);
+        const path = request.path;
+
+        // let cnt = 0;
+        // for (let i = 0; i != this.path.length; ++i) {
+        //     if (this.path[i] != '*') {
+        //         cnt++;
+        //     }
+        //     else break;
+        // }
+        // path = path.slice(cnt);
+        const finalPath = Path.join(this.dir, path == '/' ? 'index.html' : path);
 
         switch (this.cacheStratgy) {
-            case ECacheStrategy.LastModified:
-                //check if the client has cache
-                const lastCache = request.headers["if-modified-since"];
-                let version;
-                fs.stat(finalPath)
-                    .then(stats =>
-                    {
-                        if (!lastCache || parseInt(lastCache) != stats.mtime.getTime()) {
-                            version = stats.mtime.getTime();
-                            response.header({ "last-modified": version });
-                            this.RequestFile(path, finalPath, response, next, version);
-                        }
-                        else {
-                            response.status(304);
-                            response.end();
-                        }
-                    })
-                    .catch(err => next());
-                break;
+        case ECacheStrategy.LastModified:
+        {
+            //check if the client has cache
+            const lastCache = request.headers['if-modified-since'];
+            let version;
+            fs.stat(finalPath)
+                .then(stats =>
+                {
+                    if (!lastCache || parseInt(lastCache) != stats.mtime.getTime()) {
+                        version = stats.mtime.getTime();
+                        response.setHeader('last-modified', version);
+                        this.RequestFile(path, finalPath, response, next, version);
+                    }
+                    else {
+                        response.statusCode = 304;
+                        response.end();
+                    }
+                })
+                .catch(() => next());
+                    
+            break;
+        }
 
-            default:
-                //None cache strategy
-                this.RequestFile(path, finalPath, response, next);
-                break;
+        default:
+            //None cache strategy
+            this.RequestFile(path, finalPath, response, next);
+            break;
         }
     }
 
@@ -93,9 +97,9 @@ export class StaticRouter extends RouterBase
         //handle target
         let target: Writable;
         if (this.filter) {
-            let filter = this.filter(path);
+            const filter = this.filter(path);
             if (filter) {
-                response.header({ "Content-Encoding": filter.ContentEncoding });
+                response.setHeader('Content-Encoding', filter.ContentEncoding);
                 filter.transform.pipe(response);
                 target = filter.transform;
             }
@@ -122,7 +126,7 @@ export class StaticRouter extends RouterBase
                     target.write(data);
                     target.end();
                 })
-                .catch(err =>
+                .catch(() =>
                 {
                     next();
                 });
