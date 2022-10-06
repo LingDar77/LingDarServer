@@ -1,29 +1,41 @@
 import http from 'http';
 
-export class ServerResponse extends http.ServerResponse
-{
+export type ServerResponse = http.ServerResponse;
+export type Request = RequestParams & http.IncomingMessage;
 
-}
-
-export class Request extends http.IncomingMessage
+interface RequestParams
 {
-    getParams: {[x:string]:string} = {};
-    postParams: {[x:string]:string} = {};
-    formParams: {[x:string]:string} = {};
-    files:{[x:string]:Promise<string>}={};
-    path = '';
+    getParams: { [x: string]: string };
+    postParams: { [x: string]: string };
+    formParams: { [x: string]: string };
+    files: { [x: string]: Promise<string> };
+    path: string;
 }
-
-export class Response extends http.ServerResponse
-{
-    
-}
+export type Response = http.ServerResponse & {Write:(chunk:object | string | Buffer, encoding?:BufferEncoding)=>boolean}
 
 export class RouterBase
 {
-
-    constructor(public pattern: RegExp)
+    public pattern: RegExp;
+    constructor(pattern: RegExp | string)
     {
+        if (typeof pattern == 'string') {
+            /**
+             *  /*
+             *  ^(\/.*)$
+             *  /cache/index
+             *  ^(\/cache\/index)$
+             */
+            let reg = '^(';
+            for (let i = 0; i != pattern.length; ++i) {
+                reg += pattern[i] == '/' ? '\\/' : pattern[i] == '*' ? '.*' : pattern[i];
+            }
+            reg += ')$';
+            this.pattern = RegExp(reg);
+        }
+        else {
+            this.pattern = pattern;
+        }
+
     }
 
     GetPriority()

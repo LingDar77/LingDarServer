@@ -4,6 +4,7 @@ import { FileManager } from '../Helpers/FileManager';
 import { promises as fs } from 'fs';
 import Path from 'path';
 import { Writable } from 'stream';
+import { Types } from '../Tools/ContentTypes';
 
 export enum ECacheStrategy
 {
@@ -17,6 +18,11 @@ export class StaticRouter extends RouterBase
     private filter: undefined | ((path: string) => { transform: Transform, ContentEncoding: string } | void);
     private fileMan: undefined | FileManager;
     private cacheStratgy = ECacheStrategy.None;
+
+    constructor(patterm:RegExp | string, private configConteneType = true)
+    {
+        super(patterm);
+    }
 
     Dir(dir = './')
     {
@@ -88,6 +94,14 @@ export class StaticRouter extends RouterBase
     {
         //handle target
         let target: Writable;
+        if(this.configConteneType)
+        {
+            const type = Types.get('.' + finalPath.split('.').pop());
+            if(type)
+            {
+                response.setHeader('Content-Type', type);
+            }
+        }
         if (this.filter) {
             const filter = this.filter(path);
             if (filter) {

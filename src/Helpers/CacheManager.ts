@@ -1,4 +1,3 @@
-/* eslint-disable no-empty */
 import { promises as fs} from 'fs';
 import sfs from 'fs';
 import LRUCache from './LRUCache';

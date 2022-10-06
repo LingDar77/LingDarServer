@@ -133,18 +133,18 @@ import { debounce } from './src/Tools/Debounce';
 import { promises as fs } from 'fs';
 import { CacheManager } from './src/Helpers/CacheManager';
 
-export function DefineRouter(pattern:RegExp)
+export function DefineRouter(pattern: RegExp | string)
 {
-    return <T extends { new(p: RegExp): RouterBase }>(constructor: T) =>
+    return <T extends { new(p: RegExp | string): RouterBase }>(constructor: T) =>
     {
         app.routers.push(new constructor(pattern));
     };
 }
 
 const app = {
-    routers : new Array<RouterBase>(),
-    onClose: ()=>{},
-    StartServer(cacheMan:CacheManager, protocol:'http' | 'https' = 'http', port = 8080, options:ServerOptions = {})
+    routers: new Array<RouterBase>(),
+    onClose: () => { },
+    StartServer(cacheMan: CacheManager, protocol: 'http' | 'https' = 'http', port = 8080, options: ServerOptions = {})
     {
         const server = new Server(protocol, cacheMan);
         server.routers = this.routers;
@@ -155,13 +155,14 @@ const app = {
         server.StartServer(this.onClose, port, options);
         return server;
     },
-    On(event:'close', callback:()=>void)
+    On(event: 'close', callback: () => void)
     {
         this.onClose = callback;
     },
-    Watch(instance:Server)
+    Watch(instance: Server)
     {
-        (async () => {
+        (async () =>
+        {
             const watcher = fs.watch(__dirname, { recursive: true });
             const response = debounce(() =>
             {
@@ -173,8 +174,9 @@ const app = {
                 console.log('Changes detected, server restarting...');
                 process.emit('SIGINT');
             }, 200);
-            
-            process.on('SIGINT', ()=>{
+
+            process.on('SIGINT', () =>
+            {
                 this.onClose();
                 instance.server?.close();
                 process.exit();

@@ -8,6 +8,7 @@
 import { promises as fs } from 'fs';
 import LRUCache from './LRUCache';
 import { Writable } from 'stream';
+import {resolve as ResolvePath} from 'path';
 
 export interface IFileManagerConfig
 {
@@ -31,6 +32,7 @@ export class FileManager
     private totalTime;
     private checkTime;
     private info = { cacheSize: 0, caches: 0 };
+    private dirs = new Array<string>();
 
     constructor(private config: IFileManagerConfig = { cacheCheckTime: 10000, cacheMaxSize: 512, cacheLastTime: 60000 })
     {
@@ -93,46 +95,72 @@ export class FileManager
         this.timer = setInterval(this._checkCaches.bind(this), this.config.cacheCheckTime);
     }
 
+    Dirs(dirs:Array<string>)
+    {
+        this.dirs = dirs;
+        return this;
+    }
+
+    private CanAcessFile(path:string)
+    {
+        const requestFile = ResolvePath(path);
+        for(let dir of this.dirs)
+        {
+            dir = ResolvePath(dir);
+            if(requestFile.startsWith(dir))
+                return true;
+            
+        }
+        return false;
+    }
+
     async RequestFile(path: string, target: Writable, version?: number): Promise<Date>
     {
         return new Promise((resovle, reject) =>
         {
-            const cache = this.caches.Get(path);
-            if (cache && (!version || version == cache?.modifiedTime.getTime())) {
-                //cache hit 
-                target.write(cache.conctent, err =>
-                {
-                    if (err)
-                        reject(err);
-                    else {
-                        if (cache) {
-                            this.lastTime = this.totalTime;
-                            resovle(cache.modifiedTime);
-                        }
-                    }
-                });
+            if(!this.CanAcessFile(path))
+            {
+                reject('Can not access file: ' + path);
             }
-            else {
+            else
+            {    
+                const cache = this.caches.Get(path);
+                if (cache && (!version || version == cache?.modifiedTime.getTime())) {
+                //cache hit 
+                    target.write(cache.conctent, err =>
+                    {
+                        if (err)
+                            reject(err);
+                        else {
+                            if (cache) {
+                                this.lastTime = this.totalTime;
+                                resovle(cache.modifiedTime);
+                            }
+                        }
+                    });
+                }
+                else {
                 //cache miss
                 //read file
-                fs.stat(path)
-                    .then(async (stats) =>
-                    {
-                        const data = await fs.readFile(path);
-                        this.caches.Set(path, { conctent: data, modifiedTime: stats.mtime });
-                        target.write(data, err =>
+                    fs.stat(path)
+                        .then(async (stats) =>
                         {
-                            if (!err) {
-                                this.lastTime = this.totalTime;
-                                resovle(stats.mtime);
-                            }
-                            else {
-                                reject(err);
-                            }
-                        });
+                            const data = await fs.readFile(path);
+                            this.caches.Set(path, { conctent: data, modifiedTime: stats.mtime });
+                            target.write(data, err =>
+                            {
+                                if (!err) {
+                                    this.lastTime = this.totalTime;
+                                    resovle(stats.mtime);
+                                }
+                                else {
+                                    reject(err);
+                                }
+                            });
 
-                    })
-                    .catch(err => reject(err));
+                        })
+                        .catch(err => reject(err));
+                }
             }
         });
     }
