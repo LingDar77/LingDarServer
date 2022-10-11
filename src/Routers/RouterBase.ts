@@ -23,13 +23,20 @@ export class RouterBase
              *  /*
              *  ^(\/.*)$
              *  /cache/index
-             *  ^(\/cache\/index)$
+             *  ^\/cache(\/index)$
+             *  /cache/*
+             *  ^\/cache(\/.*)$
+             *  
+             *  reg
+             *  (\/*)
              */
-            let reg = '^(';
-            for (let i = 0; i != pattern.length; ++i) {
-                reg += pattern[i] == '/' ? '\\/' : pattern[i] == '*' ? '.*' : pattern[i];
-            }
-            reg += ')$';
+           
+            let reg = pattern.replace(/\//g,'\\/');
+            // \/*
+            // \/cache\/*
+            reg = '^'  + reg.replace(/\\\/\*/g, '(\\/.*)$');
+
+
             this.pattern = RegExp(reg);
         }
         else {

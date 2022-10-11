@@ -9,7 +9,8 @@ import { Types } from '../Tools/ContentTypes';
 export enum ECacheStrategy
 {
     None,
-    LastModified
+    LastModified,
+    MaxAge
 }
 
 export class StaticRouter extends RouterBase
@@ -18,6 +19,7 @@ export class StaticRouter extends RouterBase
     private filter: undefined | ((path: string) => { transform: Transform, ContentEncoding: string } | void);
     private fileMan: undefined | FileManager;
     private cacheStratgy = ECacheStrategy.None;
+    maxAge: number | undefined;
 
     constructor(patterm:RegExp | string, private configConteneType = true)
     {
@@ -45,6 +47,12 @@ export class StaticRouter extends RouterBase
     GetPriority(): number
     {
         return 1;
+    }
+
+    MaxAge(age:number)
+    {
+        this.maxAge = age;
+        return this;
     }
 
     CacheStrategy(strategy: ECacheStrategy)
@@ -78,11 +86,19 @@ export class StaticRouter extends RouterBase
                         response.end();
                     }
                 })
-                .catch(() => next());
+                .catch((err) => {
+                    next();
+                });
                     
             break;
         }
-
+        case ECacheStrategy.MaxAge:
+        {
+            this.maxAge = this.maxAge ? this.maxAge : 86400;
+            response.setHeader('Cache-Control', 'public, max-age=' + this.maxAge);
+            this.RequestFile(path, finalPath, response, next);
+            break;
+        }
         default:
             //None cache strategy
             this.RequestFile(path, finalPath, response, next);

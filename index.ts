@@ -182,12 +182,11 @@ const app = {
                 process.exit();
             });
             for await (const event of watcher) {
-                response(event);
+                if(event.eventType == 'change')
+                    response(event);
             }
         })();
     }
 };
-
-
 
 export default app;

@@ -18,14 +18,17 @@ const cm = new CacheManager({ persistentDir: 'C:/Cache/LDServerCache', tempDir: 
 app.routers.push(new StaticRouter('/*')
     .Dir('./www')
     .FileManager(fm)
+    .CacheStrategy(ECacheStrategy.MaxAge));
+app.routers.push(new StaticRouter('/Cache/*')
+    .Dir('C:/Cache/LDServerCache')
+    .FileManager(fm)
     .CacheStrategy(ECacheStrategy.LastModified));
-
 @DefineRouter('/api/test')
 class TestRouter extends RouterBase
 {
     Post(request: Request, response: Response, next: () => void): void
     {
-        response.write(JSON.stringify(request.postParams));
+        response.Write(request.postParams);
         response.end();
     }
     Get(request: Request, response: Response, next: () => void): void

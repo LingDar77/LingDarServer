@@ -29,7 +29,7 @@ export class Server
         this.server = (this.instance as typeof http).createServer(options, async (request, response) =>
         {
             let next = () => { };
-            function* iter(routers: Array<RouterBase>)
+            function* iterate(routers: Array<RouterBase>)
             {
                 for (const router of routers) {
 
@@ -70,13 +70,13 @@ export class Server
             if (await this.ParseHeader(req, options)) {
 
                 response.setHeader('X-Frame-Options', 'SAMEORIGIN');
-                response.setHeader('Content-Security-Policy', 'data default-src \'self\'; img-src *; script-src \'self\'; style-src \'self\';');
-                const loop = iter(this.routers);
+                response.setHeader('Content-Security-Policy', 'img-src *; script-src \'self\'; style-src \'self\' \'unsafe-inline\'; frame-ancestors \'self\'');
+                const loop = iterate(this.routers);
                 next = () =>
                 {
-                    process.nextTick(() => loop.next());
+                    process.nextTick(loop.next.bind(loop));
                 };
-                next();
+                loop.next();
             }
 
         });
@@ -93,19 +93,24 @@ export class Server
         return new Promise((resolve) =>
         {
 
-            request.path = request.url ?? '/';
+            try {
+                request.path = decodeURI(request.url ?? '/');
+            } catch (error) {
+                request.path = request.url ?? '/';
+            }
             request.postParams = {};
             request.getParams = {};
             request.formParams = {};
             request.files = {};
+            
             //parse get params
             const size = parseInt(request.headers['content-length'] ?? '0');
             if (size > (options.maxContentSize ?? 1024 * 1024 * 20)) {
                 request.socket.destroy();
                 resolve(false);
             }
-            const types = request.headers['content-type'];
-            if (!types) {
+            
+            if (request.method == 'GET') {
                 if (request.url) {
                     const results = request.url.match(/(.+)\?((?:[^=&]+=[^&]+&?)+)/);
                     if (results) {
@@ -122,7 +127,48 @@ export class Server
                     resolve(true);
                 }
             }
-            else if (types == 'application/json') {
+            else {
+                const types = request.headers['content-type'];
+                if(types)
+                { 
+                    const results = types.match(/multipart\/form-data; boundary=(.+)/);
+                    if (results) {
+                        //parse form data
+                        const boundary = '--' + results[1];
+                        let buffer = Buffer.alloc(0);
+                        request.on('data', (data: Buffer) =>
+                        {
+                            buffer = Buffer.concat([buffer, data]);
+                        });
+                        request.on('end', () =>
+                        {
+                            const items = buffer.toString('binary').split(boundary);
+                            items.pop();
+                            items.shift();
+                            for (const item of items) {
+                                const i = item.indexOf('\r\n\r\n');
+                                const head = item.slice(0, i);
+                                const body = item.slice(i + 4, -2);
+                                const parts = head.split('; ');
+                                const name = parts[1].split('=')[1].slice(1, -1);
+                                let fname = parts[2] ? parts[2].split('=')[1].split('\r\n')[0].slice(1, -1) : parts[2];
+                                if (!fname) {
+                                    request.formParams[name] = body.slice(0, -2);
+    
+                                }
+                                else {
+                                    fname = Buffer.from(fname, 'binary').toString();
+                                    //start handle uploading, send an upload id to client
+                                    //this id can be used to query the progress of this upload
+                                    if (this.cm) {
+                                        const path = this.cm.CacheFile(Buffer.from(body, 'binary'), fname);
+                                        request.files[fname] = path;
+                                    }
+                                }
+                            }
+                        });
+                    }
+                }
                 if (request.method == 'POST') { //parse post params
                     let buffer = Buffer.alloc(0);
                     request.on('data', (data: Buffer) =>
@@ -131,57 +177,19 @@ export class Server
                     });
                     request.on('end', () =>
                     {
-                        const params = JSON.parse(buffer.toString());
-                        if (params) {
-                            request.postParams = params;
-                        }
-                        request.path = request.url ?? '/';
-                        resolve(true);
-                    });
-                }
-
-            }
-            else {
-                const results = types.match(/multipart\/form-data; boundary=(.+)/);
-                if (results) {
-                    const boundary = '--' + results[1];
-                    let buffer = Buffer.alloc(0);
-                    request.on('data', (data: Buffer) =>
-                    {
-                        buffer = Buffer.concat([buffer, data]);
-                    });
-                    request.on('end', () =>
-                    {
-                        const items = buffer.toString('binary').split(boundary);
-                        items.pop();
-                        items.shift();
-                        for (const item of items) {
-                            const i = item.indexOf('\r\n\r\n');
-                            const head = item.slice(0, i);
-                            const body = item.slice(i + 4, -2);
-                            const parts = head.split('; ');
-                            const name = parts[1].split('=')[1].slice(1, -1);
-                            let fname = parts[2] ? parts[2].split('=')[1].split('\r\n')[0].slice(1, -1) : parts[2];
-                            if (!fname) {
-                                request.formParams[name] = body.slice(0, -2);
-
+                        try {
+                            const params = JSON.parse(buffer.toString());
+                            if (params) {
+                                request.postParams = params;
                             }
-                            else {
-                                fname = Buffer.from(fname, 'binary').toString();
-                                //start handle uploading, send an upload id to client
-                                //this id can be used to query the progress of this upload
-                                if (this.cm) {
-                                    const path = this.cm.CacheFile(Buffer.from(body, 'binary'), fname);
-                                    request.files[fname] = path;
-                                }
-                            }
+                            resolve(true);
+                        } catch (error) {
+                            resolve(false);
                         }
-                        resolve(true);
                     });
                 }
-                else {
-                    resolve(false);
-                }
+                else
+                    resolve(true);
             }
         });
     }
