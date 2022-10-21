@@ -11,7 +11,12 @@ interface RequestParams
     files: { [x: string]: Promise<string> };
     path: string;
 }
-export type Response = http.ServerResponse & {Write:(chunk:object | string | Buffer, encoding?:BufferEncoding)=>boolean}
+export type Response = http.ServerResponse & {
+    Write:(chunk:object | string | Buffer, encoding?:BufferEncoding)=>boolean, 
+    End:(message?: string | object | Buffer)=>void,
+} & 
+{End:(code?:number)=>void} &
+{End:(code?:number, message?: string | object | Buffer)=>void}
 
 export class RouterBase
 {

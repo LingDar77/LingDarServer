@@ -1,12 +1,12 @@
 {
   "name": "lingdarserver",
-  "version": "1.0.3",
+  "version": "1.0.0",
   "description": "",
-  "main": "build/index.js",
+  "main": "build/src",
+  "module": "build/src",
   "repository": "https://github.com/LingDar77/LingDarServer.git",
-  "types": "./build/types/index.d.ts",
   "scripts": {
-    "test": "tsc --project ./ && node ./build/demoServer.js",
+    "test": "tsc --project ./ && node ./demoServer.js",
     "build": "tsc --project ./"
   },
   "keywords": [
@@ -19,10 +19,10 @@
   "devDependencies": {
     "@typescript-eslint/eslint-plugin": "^5.38.1",
     "@typescript-eslint/parser": "^5.38.1",
-    "eslint": "^8.24.0",
-    "typescript": "^4.8.3"
+    "eslint": "^8.24.0"
   },
   "dependencies": {
-    "@types/node": "^18.8.1"
+    "@types/node": "^18.8.1",
+    "cross-fetch": "^3.1.5"
   }
 }

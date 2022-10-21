@@ -12,7 +12,7 @@
                 "<node_internals>/**"
             ],
             "preLaunchTask": "npm: build",
-            "program": "${workspaceFolder}/demoServer.ts",
+            "program": "${workspaceFolder}/src/demoServer.ts",
             "outFiles": [
                 "${workspaceFolder}/**/*.js"
             ]

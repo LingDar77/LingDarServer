@@ -66,6 +66,33 @@ export class Server
                 else
                     return res.write(chunk, encoding);
             };
+            
+            res.End = (...args)=>
+            {
+                if(typeof args[0] == 'number')
+                {
+                    if(args[1])
+                    {
+                        res.Write(args[1] as string);
+                        res.statusCode = args[0];
+                        res.end();
+                    }
+                    else
+                    {
+                        res.statusCode = args[0];
+                        res.end();
+                    }
+                }
+                else if(args[0])
+                {
+                    res.Write(args[0] as string);
+                    res.end();
+                }
+                else
+                {
+                    res.end();
+                }
+            };
 
             if (await this.ParseHeader(req, options)) {
 

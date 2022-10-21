@@ -19,7 +19,7 @@ export class StaticRouter extends RouterBase
     private filter: undefined | ((path: string) => { transform: Transform, ContentEncoding: string } | void);
     private fileMan: undefined | FileManager;
     private cacheStratgy = ECacheStrategy.None;
-    maxAge: number | undefined;
+    private maxAge: number | undefined;
 
     constructor(patterm:RegExp | string, private configConteneType = true)
     {
