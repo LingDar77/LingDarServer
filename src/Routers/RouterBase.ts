@@ -10,6 +10,7 @@ interface RequestParams
     formParams: { [x: string]: string };
     files: { [x: string]: Promise<string> };
     path: string;
+    ip:string;
 }
 export type Response = http.ServerResponse & {
     Write:(chunk:object | string | Buffer, encoding?:BufferEncoding)=>boolean, 

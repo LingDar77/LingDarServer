@@ -129,6 +129,7 @@ export class Server
             request.getParams = {};
             request.formParams = {};
             request.files = {};
+            request.ip = request.headers['host'] ?? '';
             
             //parse get params
             const size = parseInt(request.headers['content-length'] ?? '0');

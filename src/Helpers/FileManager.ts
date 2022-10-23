@@ -1,20 +1,13 @@
-//Target: cache files when requesting a file that has not be changed
-/**
- * system need to know wheather the requeting file have changed
- * if checking the update time every request may cause frequently accesses
- * maybe check the cached files changing time when system is free
- */
-
-import { promises as fs } from 'fs';
 import LRUCache from './LRUCache';
-import { Writable } from 'stream';
+import { promises as fs } from 'fs';
 import {resolve as ResolvePath} from 'path';
+import { Writable } from 'stream';
 
-export interface IFileManagerConfig
+export interface IFileManConfig
 {
-    cacheCheckTime: number;
-    cacheMaxSize: number;
-    cacheLastTime: number;
+    CheckFrequency:number,
+    CacheDuration:number,
+    CacheMaxSize:number
 }
 
 export interface IFileCache
@@ -26,26 +19,35 @@ export interface IFileCache
 
 export class FileManager
 {
-    private caches;
-    private timer;
-    private lastTime;
-    private totalTime;
-    private checkTime;
-    private info = { cacheSize: 0, caches: 0 };
+    private caches = new LRUCache<string, IFileCache>();
     private dirs = new Array<string>();
+    private lastingTime = 0;
+    private timer;
+    private config:IFileManConfig = {CacheDuration:60000, CacheMaxSize:512, CheckFrequency:10000}; 
+    public readonly info = { cacheSize: 0, caches: 0 };
 
-    constructor(private config: IFileManagerConfig = { cacheCheckTime: 10000, cacheMaxSize: 512, cacheLastTime: 60000 })
+    constructor(config?:Partial<IFileManConfig>)
     {
-        this.caches = new LRUCache<string, IFileCache>();
-        this.checkTime = config.cacheCheckTime;
-        this.totalTime = config.cacheLastTime;
-        this.timer = setInterval(this._checkCaches.bind(this), config.cacheCheckTime);
-        this.lastTime = config.cacheLastTime;
+        if(config?.CheckFrequency)
+        {
+            this.config.CheckFrequency = config.CheckFrequency;
+        }
+        if(config?.CacheMaxSize)
+        {
+            this.config.CacheMaxSize = config.CacheMaxSize;
+        }
+        if(config?.CacheDuration)
+        {
+            this.config.CacheDuration = config.CacheDuration;
+        }
+        this.lastingTime = this.config?.CacheDuration;
+        this.timer = setInterval(this.checkCaches.bind(this), this.config.CheckFrequency);
     }
 
-    private _checkCaches()
+    private checkCaches()
     {
-        if (this.lastTime > 0) {
+
+        if (this.lastingTime > 0) {
             let size = 0;
             for (const item of this.caches) size = + item[1].conctent.length;
             size /= 1024 * 1024;
@@ -53,7 +55,7 @@ export class FileManager
             this.info.cacheSize = size;
             this.info.caches = this.caches.Size();
 
-            while (size >= this.config.cacheMaxSize) {
+            while (size >= this.config.CacheMaxSize) {
                 const cache = this.caches.Pop();
                 if (cache?.val) {
                     let freeSize = cache.val?.conctent.length;
@@ -79,29 +81,15 @@ export class FileManager
                     });
             }
 
-            this.lastTime -= this.checkTime;
-            if (this.lastTime <= 0) {
+            this.lastingTime -= this.config.CacheDuration;
+            if (this.lastingTime <= 0) {
                 //consider clear all caches
                 this.caches.Clear();
             }
         }
-
     }
 
-    ResetCacheTimer(cacheCheckTime: 10000)
-    {
-        this.config.cacheCheckTime = cacheCheckTime;
-        clearInterval(this.timer);
-        this.timer = setInterval(this._checkCaches.bind(this), this.config.cacheCheckTime);
-    }
-
-    Dirs(dirs:Array<string>)
-    {
-        this.dirs = dirs;
-        return this;
-    }
-
-    private CanAcessFile(path:string)
+    private canAcessFile(path:string)
     {
         const requestFile = ResolvePath(path);
         for(let dir of this.dirs)
@@ -114,11 +102,29 @@ export class FileManager
         return false;
     }
 
+    ResetCacheTimer(cacheCheckTime: 10000)
+    {
+        this.config.CheckFrequency = cacheCheckTime;
+        clearInterval(this.timer);
+        this.timer = setInterval(this.checkCaches.bind(this), this.config.CheckFrequency);
+    }
+    
+    GetCache(path: string)
+    {
+        return this.caches.Get(path);
+    }
+
+    Dirs(dirs:Array<string>)
+    {
+        this.dirs = dirs;
+        return this;
+    }
+
     async RequestFile(path: string, target: Writable, version?: number): Promise<Date>
     {
         return new Promise((resovle, reject) =>
         {
-            if(!this.CanAcessFile(path))
+            if(!this.canAcessFile(path))
             {
                 reject('Can not access file: ' + path);
             }
@@ -133,7 +139,7 @@ export class FileManager
                             reject(err);
                         else {
                             if (cache) {
-                                this.lastTime = this.totalTime;
+                                this.lastingTime = this.config.CacheDuration;
                                 resovle(cache.modifiedTime);
                             }
                         }
@@ -150,7 +156,7 @@ export class FileManager
                             target.write(data, err =>
                             {
                                 if (!err) {
-                                    this.lastTime = this.totalTime;
+                                    this.lastingTime = this.config.CacheDuration;
                                     resovle(stats.mtime);
                                 }
                                 else {
@@ -165,9 +171,4 @@ export class FileManager
         });
     }
 
-    GetCache(path: string)
-    {
-        return this.caches.Get(path);
-    }
 }
-

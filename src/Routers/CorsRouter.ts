@@ -7,11 +7,14 @@ class CorsRouter extends RouterBase
 {
     Get(request: Request, response: Response, next: () => void): void
     {
+        response.setHeader('Referrer-Policy', 'no-referrer');
         response.setHeader('Access-Control-Allow-Origin', '*' );
         next();
     }
     Post(request: Request, response: Response, next: () => void): void
     {
+        response.setHeader('Referrer-Policy', 'no-referrer');
+
         response.setHeader('Access-Control-Allow-Origin', '*' );
         next();
     }

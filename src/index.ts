@@ -30,11 +30,11 @@ const app = {
     {
         this.onClose = callback;
     },
-    Watch(instance: Server)
+    Watch(instance: Server, path:string)
     {
         (async () =>
         {
-            const watcher = fs.watch(__dirname, { recursive: true });
+            const watcher = fs.watch(path, { recursive: true });
             const response = debounce(() =>
             {
                 process.addListener('exit', () =>

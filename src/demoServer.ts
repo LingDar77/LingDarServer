@@ -19,6 +19,7 @@ app.routers.push(new StaticRouter('/*')
     .Dir('./www')
     .FileManager(fm)
     .CacheStrategy(ECacheStrategy.MaxAge));
+
 app.routers.push(new StaticRouter('/Cache/*')
     .Dir('C:/Cache/LDServerCache')
     .FileManager(fm)
@@ -145,8 +146,7 @@ class LoginRouter extends RouterBase
     }
 }
 
-
 const server = app.StartServer(cm);
 console.clear();
 console.log('Server started running at: http://localhost:8080');
-app.Watch(server);
+app.Watch(server, __filename);
