@@ -1,6 +1,4 @@
 import http from 'http';
-
-export type ServerResponse = http.ServerResponse;
 export type Request = RequestParams & http.IncomingMessage;
 
 interface RequestParams

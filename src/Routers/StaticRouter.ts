@@ -1,9 +1,10 @@
-import { Request, Response, RouterBase,ServerResponse } from './RouterBase';
+import { Request, Response, RouterBase } from './RouterBase';
 import { Transform } from 'stream';
 import { FileManager } from '../Helpers/FileManager';
 import { promises as fs } from 'fs';
 import Path from 'path';
 import { Writable } from 'stream';
+import LRUCache from '../Helpers/LRUCache';
 import { Types } from '../Tools/ContentTypes';
 
 export enum ECacheStrategy
@@ -112,7 +113,7 @@ export class StaticRouter extends RouterBase
         let target: Writable;
         if(this.configConteneType)
         {
-            const type = Types.get('.' + finalPath.split('.').pop());
+            const type = Types.Get('.' + finalPath.split('.').pop());
             if(type)
             {
                 response.setHeader('Content-Type', type);

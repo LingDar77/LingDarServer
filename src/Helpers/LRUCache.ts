@@ -1,3 +1,5 @@
+import { DefineClass } from '../Tools/Utils';
+@DefineClass()
 export class LRUCache<Key, Value>
 {
     private cache = new Map<Key, Value>();

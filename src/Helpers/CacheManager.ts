@@ -4,6 +4,7 @@ import LRUCache from './LRUCache';
 import Path from 'path';
 import crypto from 'crypto';
 import { clearInterval } from 'timers';
+import { Serialize, Deserialize } from '../Tools/Utils';
 
 export interface ICacheManagerConfig
 {
@@ -44,16 +45,7 @@ export class CacheManager
         fs.readFile(Path.join(this.config.persistentDir, 'persistents.json'))
             .then(buf =>
             {
-                this.persistents = JSON.parse(buf.toString(), (key, value) =>
-                {
-                    if (typeof value === 'object' && value !== null) {
-                        if (value.dataType === 'Map') {
-                            return new Map(value.value);
-                        }
-                    }
-                    return value;
-                });
-
+                this.persistents = Deserialize(Map<string, string>, buf.toString());
             })
             .catch(() => { });
 
@@ -105,18 +97,7 @@ export class CacheManager
         sfs.rmdirSync(this.config.tempDir, { recursive:true });
         //record persistents map
         if (this.persistents.size) {
-            const json = JSON.stringify(this.persistents,
-                (key, value) =>
-                {
-                    if (value instanceof Map) {
-                        return {
-                            dataType: 'Map',
-                            value: Array.from(value.entries()), // or with spread: value: [...value]
-                        };
-                    } else {
-                        return value;
-                    }
-                });
+            const json = Serialize(this.persistents);
             sfs.writeFileSync(Path.join(this.config.persistentDir, 'persistents.json'), json);
         }
     }

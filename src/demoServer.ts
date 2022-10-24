@@ -1,10 +1,12 @@
 import app, { DefineRouter } from './index';
 import { ECacheStrategy, StaticRouter } from './Routers/StaticRouter';
-import './Routers/CorsRouter';
 import { Request, Response, RouterBase } from './Routers/RouterBase';
+import './Routers/CorsRouter';
 import { FileManager } from './Helpers/FileManager';
 import { CacheManager } from './Helpers/CacheManager';
 import fetch from 'cross-fetch';
+import { defineClass, Serialize } from './Tools/Utils';
+
 app.On('close', () =>
 {
     console.log('server closed');
@@ -18,9 +20,8 @@ const cm = new CacheManager({ persistentDir: 'C:/Cache/LDServerCache', tempDir: 
 app.routers.push(new StaticRouter('/*')
     .Dir('./www')
     .FileManager(fm)
-    .CacheStrategy(ECacheStrategy.MaxAge));
-
-app.routers.push(new StaticRouter('/Cache/*')
+    .CacheStrategy(ECacheStrategy.LastModified));
+app.routers.push(new StaticRouter('/cache/*')
     .Dir('C:/Cache/LDServerCache')
     .FileManager(fm)
     .CacheStrategy(ECacheStrategy.LastModified));
@@ -34,22 +35,7 @@ class TestRouter extends RouterBase
     }
     Get(request: Request, response: Response, next: () => void): void
     {
-        const fname = request.getParams.filename;
-        if(fname){
-            fm.RequestFile(fname, response).then(()=>{
-                
-                response.end();
-            }).catch(()=>{
-                response.statusCode = 423;
-                response.end();
-            });
-        }
-        else
-        {
-            response.Write(request.getParams);
-            response.end();
-        }
-        
+        response.End(200);
     }
 }
 
@@ -146,7 +132,8 @@ class LoginRouter extends RouterBase
     }
 }
 
-const server = app.StartServer(cm);
+const server = app.StartServer(cm,'http',18886);
 console.clear();
-console.log('Server started running at: http://localhost:8080');
+console.log('Server started running at: http://localhost:18886');
 app.Watch(server, __filename);
+

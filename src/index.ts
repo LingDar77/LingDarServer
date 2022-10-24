@@ -1,7 +1,7 @@
 import { Server, ServerOptions } from './Core/Server';
 import { RouterBase } from './Routers/RouterBase';
 import { spawnSync } from 'child_process';
-import { debounce } from './Tools/Debounce';
+import { debounce } from './Tools/Utils';
 import { promises as fs } from 'fs';
 import { CacheManager } from './Helpers/CacheManager';
 
