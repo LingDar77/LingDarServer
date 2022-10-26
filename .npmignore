@@ -6,3 +6,5 @@ tsconfig.json
 *.js.map
 www
 demoServer.*
+*.key
+*.pem

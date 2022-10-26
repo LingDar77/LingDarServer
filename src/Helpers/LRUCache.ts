@@ -1,5 +1,5 @@
-import { DefineClass } from '../Tools/Utils';
-@DefineClass()
+import { DeclareClass } from '../Tools/Utils';
+@DeclareClass()
 export class LRUCache<Key, Value>
 {
     private cache = new Map<Key, Value>();
@@ -71,6 +71,5 @@ export class LRUCache<Key, Value>
         this.cache.delete(key);
     }
 }
-
 
 export default LRUCache;

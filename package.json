@@ -1,8 +1,8 @@
 {
   "name": "lingdar-server",
-  "version": "1.0.7",
+  "version": "1.0.12",
   "description": "",
-  "main": "index.js",
+  "main": "WebServer.js",
   "repository": "https://github.com/LingDar77/LingDarServer.git",
   "scripts": {
     "test": "tsc --project ./ && node ./demoServer.js",
@@ -21,6 +21,6 @@
     "eslint": "^8.24.0"
   },
   "dependencies": {
-    "@types/node": "^18.8.1"
+    "@types/node": "^18.11.6"
   }
 }

@@ -1,32 +1,76 @@
 import http from 'http';
 import https from 'https';
-import { CacheManager } from '../Helpers/CacheManager';
-import { RouterBase, Request, Response } from '../Routers/RouterBase';
+import { promises as fs } from 'fs';
+import { Debounce } from './Tools/Utils';
+import { spawnSync } from 'child_process';
+import { CacheManager } from './Helpers/CacheManager';
+import { RouterBase, Request, Response } from './Routers/RouterBase';
 
-export type ServerOptions = { maxContentSize?: number } & http.ServerOptions;
+export type ServerOptions = { maxContentSize?: number } & https.ServerOptions;
+export const globalRouters =  new Array<[RouterBase, (webServer:WebServer)=>boolean]>();
 
-export class Server
+export function DefineRouter(pathPattern: RegExp | string, targetServer:((webServer:WebServer)=>boolean) | WebServer = (webServer:WebServer)=>true)
 {
-    private http = http;
-    private https = https;
+    return <T extends { new(p: RegExp | string): RouterBase }>(constructor: T) =>
+    {
+        if(targetServer instanceof WebServer)
+        {
+            if(targetServer)
+            {
+                targetServer.routers.push(new constructor(pathPattern));
+            }
+            else
+            {
+                globalRouters.push([new constructor(pathPattern), (webServer)=>webServer == targetServer]);
+            }
+        }
+        else
+        {
+            globalRouters.push([new constructor(pathPattern), targetServer]);
+        }
+    };
+}
+
+export class WebServer
+{
     private instance;
     public routers = new Array<RouterBase>();
     public server: http.Server | undefined;
-
-    constructor(protocol: 'http' | 'https' = 'http', private cm: CacheManager)
+    private options:ServerOptions = {};
+    private onClose= ()=>{};
+    
+    constructor(protocol: 'http' | 'https' = 'http', private cm?: CacheManager)
     {
-        this.instance = this[protocol];
+        this.instance = protocol == 'http' ? http : https;
     }
 
-    StartServer(onClose = () => { }, port = 8080, options: ServerOptions = {})
+    Options(options: ServerOptions)
     {
+        this.options = options;
+        return this;
+    }
 
+    OnClose(onClose:()=>void)
+    {
+        this.onClose = onClose;
+        return this;
+    }
+
+    StartServer(port = 8080)
+    {
+        for(const router of globalRouters)
+        {
+            if(router[1](this))
+            {
+                this.routers.push(router[0]);
+            }
+        }
         this.routers.sort((a, b) =>
         {
             return a.GetPriority() - b.GetPriority();
         });
 
-        this.server = (this.instance as typeof http).createServer(options, async (request, response) =>
+        this.server = (this.instance as typeof http).createServer(this.options, async (request, response) =>
         {
             let next = () => { };
             function* iterate(routers: Array<RouterBase>)
@@ -94,7 +138,7 @@ export class Server
                 }
             };
 
-            if (await this.ParseHeader(req, options)) {
+            if (await this.ParseHeader(req, this.options)) {
 
                 response.setHeader('X-Frame-Options', 'SAMEORIGIN');
                 response.setHeader('Content-Security-Policy', 'img-src *; script-src \'self\'; style-src \'self\' \'unsafe-inline\'; frame-ancestors \'self\'');
@@ -111,8 +155,8 @@ export class Server
         this.server.headersTimeout = 3200;
 
         this.server.listen(port);
-        this.server.on('close', onClose);
-        return this.server;
+        this.server.on('close', this.onClose);
+        return this;
     }
 
     private async ParseHeader(request: Request, options: ServerOptions): Promise<boolean>
@@ -123,7 +167,8 @@ export class Server
             try {
                 request.path = decodeURI(request.url ?? '/');
             } catch (error) {
-                request.path = request.url ?? '/';
+                request.socket.destroy();
+                resolve(false);
             }
             request.postParams = {};
             request.getParams = {};
@@ -189,8 +234,7 @@ export class Server
                                     //start handle uploading, send an upload id to client
                                     //this id can be used to query the progress of this upload
                                     if (this.cm) {
-                                        const path = this.cm.CacheFile(Buffer.from(body, 'binary'), fname);
-                                        request.files[fname] = path;
+                                        request.files[fname] = this.cm.CacheFile(Buffer.from(body, 'binary'), fname);
                                     }
                                 }
                             }
@@ -220,5 +264,36 @@ export class Server
                     resolve(true);
             }
         });
+    }
+
+    Watch(path:string)
+    {
+        (async () =>
+        {
+            const watcher = fs.watch(path, { recursive: true });
+            const response = Debounce(() =>
+            {
+                process.addListener('exit', () =>
+                {
+                    spawnSync('node', [process.argv[1]], { stdio: 'inherit', shell: true, windowsHide:true });
+                });
+                console.clear();
+                console.log('Changes detected, restarting...');
+                process.emit('SIGINT');
+            }, 200);
+
+            process.on('SIGINT', () =>
+            {
+                this.onClose();
+                if(this.server)
+                    this.server.close();
+                process.exit();
+            });
+            for await (const event of watcher) {
+                if(event.eventType == 'change')
+                    response();
+            }
+        })();
+        return this;
     }
 }

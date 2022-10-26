@@ -86,6 +86,9 @@ export class CacheManager
                         }
                     }
                     
+                })
+                .catch(()=>{
+                    fs.mkdir(this.config.persistentDir);
                 });
             
         }

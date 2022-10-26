@@ -1,4 +1,4 @@
-import { DefineRouter } from '../index';
+import { DefineRouter } from '../WebServer';
 import { Request, Response, RouterBase } from '../Routers/RouterBase';
 
 //Actually you may not want to use this router, instead, you may need to write your own policy to handlle cors

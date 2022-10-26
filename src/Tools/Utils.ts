@@ -1,9 +1,20 @@
-import { type } from 'os';
 
-export function debounce(f: (...args: unknown[]) => void, threshold = 1000)
+type ReturnType<T> = T extends (...args: never[]) => infer R ? R : unknown;
+type ParamsType<T> = T extends (...args: infer P) => unknown ? P : unknown;
+export type Constructor<T> = {new(...args:never[]):T};
+
+export const classes = new Array<Constructor<unknown>>;
+
+/**
+ * Force the given function to run one time via given time
+ * @param f the function
+ * @param threshold the time
+ * @returns the debounced function
+ */
+export function Debounce<T extends unknown[]>(f: (...args: T) => unknown, threshold = 1000)
 {
     let timer: NodeJS.Timeout;
-    return (...args: unknown[]) =>
+    return (...args: ParamsType<typeof f>) =>
     {
         
         if (timer)
@@ -15,7 +26,13 @@ export function debounce(f: (...args: unknown[]) => void, threshold = 1000)
     };
 }
 
-export function formatDate(date: Date, format = 'yyyy-mm-dd')
+/**
+ * Format the given date into given pattern
+ * @param date the date to format
+ * @param format the patern to apply, like yyyy-mm-dd
+ * @returns the desired pattern string
+ */
+export function FormatDate(date: Date, format = 'yyyy-mm-dd')
 {
     format = format.toLowerCase();
     const parts = date.toLocaleDateString().split('/');
@@ -25,27 +42,27 @@ export function formatDate(date: Date, format = 'yyyy-mm-dd')
     return result;
 }
 
-export type Constructor<T> = {new():T};
-
-export const classes = new Array<Constructor<unknown>>;
-
-export function DefineClass()
+/**
+ * Declare that class may need to be deserialized
+ */
+export function DeclareClass()
 {
-    console.log('defineclass');
-    
-    return <T>(constructor: {new():T}) =>
-    {
-        classes.push(constructor);
-    };
+    return declareClass;
 }
 
-export const defineClass = <T>(constructor: Constructor<T>) =>
+/**
+ * Declare that class may need to be deserialized
+ */
+export const declareClass = <T>(constructor: Constructor<T>) =>
 {
-    console.log('define');
-    
     classes.push(constructor);
 };
 
+/**
+ * Serialize the given object into json string
+ * @param obj the object to be serialized
+ * @returns the result json string
+ */
 export function Serialize<T extends object>(obj:T):string
 {
     // const constructor = obj.constructor as {new():T};
@@ -95,6 +112,12 @@ export function Serialize<T extends object>(obj:T):string
     
 }
 
+/**
+ * Deserialize the given json to sertain object, all relative classes need to be declared before(self included)
+ * @param constructor the constructor of target object
+ * @param json the json string of object
+ * @returns the reuslt object
+ */
 export function Deserialize<T extends object>(constructor:Constructor<T>, json:string)
 {
     new constructor();
@@ -133,4 +156,19 @@ export function Deserialize<T extends object>(constructor:Constructor<T>, json:s
         }
         return val;
     })as T;
+}
+
+/**
+ * Mesure the run time of the given function
+ * @param f the function that will be measured
+ * @returns the mesurement function, that returns the reuslt as milliseconds
+ */
+export function Measurement<T extends unknown[]>(f:(...args:T)=>unknown)
+{
+    return (...args:ParamsType<typeof f>)=>{
+        const timeStamp1 = new Date().getTime();
+        f(...args);
+        const timeStamp2 = new Date().getTime();
+        return timeStamp2 - timeStamp1;
+    };
 }
