@@ -17,7 +17,7 @@ export type Response = http.ServerResponse & {
 {End:(code?:number)=>void} &
 {End:(code?:number, message?: string | object | Buffer)=>void}
 
-export class RouterBase
+export abstract class RouterBase
 {
     public pattern: RegExp;
     constructor(pattern: RegExp | string)

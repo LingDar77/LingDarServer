@@ -5,6 +5,7 @@ import { Debounce } from './Tools/Utils';
 import { spawnSync } from 'child_process';
 import { CacheManager } from './Helpers/CacheManager';
 import { RouterBase, Request, Response } from './Routers/RouterBase';
+import { ServerHandler } from './Handlers/ServerHandler';
 
 export type ServerOptions = { maxContentSize?: number } & https.ServerOptions;
 export const globalRouters =  new Array<[RouterBase, (webServer:WebServer)=>boolean]>();
@@ -36,12 +37,19 @@ export class WebServer
     private instance;
     public routers = new Array<RouterBase>();
     public server: http.Server | undefined;
+    public handlers:ServerHandler[] = [];
     private options:ServerOptions = {};
     private onClose= ()=>{};
     
-    constructor(protocol: 'http' | 'https' = 'http', private cm?: CacheManager)
+    constructor(protocol: 'http' | 'https' = 'http', public readonly cm?: CacheManager)
     {
         this.instance = protocol == 'http' ? http : https;
+    }
+
+    Handle(handler:ServerHandler)
+    {
+        this.handlers.push(handler);
+        return this;
     }
 
     Options(options: ServerOptions)
@@ -72,84 +80,15 @@ export class WebServer
 
         this.server = (this.instance as typeof http).createServer(this.options, async (request, response) =>
         {
-            let next = () => { };
-            function* iterate(routers: Array<RouterBase>)
-            {
-                for (const router of routers) {
-
-                    const results = req.path.match(router.pattern);
-                    if (results) {
-                        req.path = results[1];
-                        switch (request.method) {
-                        case 'GET':
-                            router.Get(req, res, next);
-                            break;
-
-                        case 'POST':
-                            router.Post(req, res, next);
-                            break;
-
-                        default:
-                            break;
-                        }
-                        yield;
-                    }
-
-                }
-                response.statusCode = 404;
-                response.end();
-            }
 
             const req = request as Request;
             const res = response as Response;
-
-            res.Write = (chunk:object | string | Buffer, encoding:BufferEncoding = 'utf-8')=>
+            if (!this.HandleRequest(req, res))
             {
-                if(typeof chunk == 'object' )
-                    return res.write(JSON.stringify(chunk), encoding);
-                else
-                    return res.write(chunk, encoding);
-            };
-            
-            res.End = (...args)=>
-            {
-                if(typeof args[0] == 'number')
-                {
-                    if(args[1])
-                    {
-                        res.Write(args[1] as string);
-                        res.statusCode = args[0];
-                        res.end();
-                    }
-                    else
-                    {
-                        res.statusCode = args[0];
-                        res.end();
-                    }
-                }
-                else if(args[0])
-                {
-                    res.Write(args[0] as string);
-                    res.end();
-                }
-                else
-                {
-                    res.end();
-                }
-            };
-
-            if (await this.ParseHeader(req, this.options)) {
-
-                response.setHeader('X-Frame-Options', 'SAMEORIGIN');
-                response.setHeader('Content-Security-Policy', 'img-src *; script-src \'self\'; style-src \'self\' \'unsafe-inline\'; frame-ancestors \'self\'');
-                const loop = iterate(this.routers);
-                next = () =>
-                {
-                    process.nextTick(loop.next.bind(loop));
-                };
-                loop.next();
+                res.statusCode = 404;
+                res.end();
+                return;
             }
-
         });
 
         this.server.headersTimeout = 3200;
@@ -159,7 +98,7 @@ export class WebServer
         return this;
     }
 
-    private async ParseHeader(request: Request, options: ServerOptions): Promise<boolean>
+    private async ParseHeader(request: Request): Promise<boolean>
     {
         return new Promise((resolve) =>
         {
@@ -178,16 +117,17 @@ export class WebServer
             
             //parse get params
             const size = parseInt(request.headers['content-length'] ?? '0');
-            if (size > (options.maxContentSize ?? 1024 * 1024 * 20)) {
+            if (size > (this.options.maxContentSize ?? 1024 * 1024 * 20)) {
                 request.socket.destroy();
                 resolve(false);
             }
             
             if (request.method == 'GET') {
+                //handle get parts
                 if (request.url) {
                     const results = request.url.match(/(.+)\?((?:[^=&]+=[^&]+&?)+)/);
                     if (results) {
-                        //set get params
+                        //set get request
                         request.path = results[1] == '/' ? '/' : results[1];
                         const params = results[2].split('&');
                         for (const param of params) {
@@ -204,6 +144,7 @@ export class WebServer
                 const types = request.headers['content-type'];
                 if(types)
                 { 
+                    //handle multipart request
                     const results = types.match(/multipart\/form-data; boundary=(.+)/);
                     if (results) {
                         //parse form data
@@ -241,7 +182,8 @@ export class WebServer
                         });
                     }
                 }
-                if (request.method == 'POST') { //parse post params
+                if (request.method == 'POST') { 
+                    //handle post request
                     let buffer = Buffer.alloc(0);
                     request.on('data', (data: Buffer) =>
                     {
@@ -264,6 +206,99 @@ export class WebServer
                     resolve(true);
             }
         });
+    }
+
+    private HandleRequest(request:Request, response:Response)
+    {
+        try {
+            request.path = decodeURI(request.url ?? '/');
+        } catch (error) {
+            request.socket.destroy();
+            return false;
+        }
+        const size = parseInt(request.headers['content-length'] ?? '0');
+        if (size > (this.options.maxContentSize ?? 1024 * 1024 * 20)) {
+            request.socket.destroy();
+            return false;
+        }
+        request.ip = request.headers['host'] ?? '';
+
+        response.Write = (chunk:object | string | Buffer, encoding:BufferEncoding = 'utf-8')=>
+        {
+            if(typeof chunk == 'object' )
+                return response.write(JSON.stringify(chunk), encoding);
+            else
+                return response.write(chunk, encoding);
+        };
+        
+        response.End = (...args)=>
+        {
+            if(typeof args[0] == 'number')
+            {
+                if(args[1])
+                {
+                    response.Write(args[1] as string);
+                    response.statusCode = args[0];
+                    response.end();
+                }
+                else
+                {
+                    response.statusCode = args[0];
+                    response.end();
+                }
+            }
+            else if(args[0])
+            {
+                response.Write(args[0] as string);
+                response.end();
+            }
+            else
+            {
+                response.end();
+            }
+        };
+
+        response.setHeader('X-Frame-Options', 'SAMEORIGIN');
+        response.setHeader('Content-Security-Policy', 'img-src *; script-src \'self\'; style-src \'self\' \'unsafe-inline\'; frame-ancestors \'self\'');
+        function handle(f:(req:Request,res:Response, router:RouterBase, next:()=>void)=>void, server:WebServer)
+        {
+            let next = () => { };
+            function* iterate(routers: Array<RouterBase>)
+            {
+                for (const router of routers) {
+
+                    const results = request.path.match(router.pattern);
+                    if (results) {
+                        if(results[1])
+                            request.path = results[1];
+                        f(request, response, router, next);
+                        yield;
+                    }
+
+                }
+                response.statusCode = 404;
+                response.end();
+            }
+            const loop = iterate(server.routers);
+            next = () =>
+            {
+                process.nextTick(loop.next.bind(loop));
+            };
+            loop.next();
+        }
+        let handled = false;
+        for(const handler of this.handlers)
+        {
+            if(handler.Match(request, this))
+            {
+                (async () => {
+                    handled = true;
+                    await handler.Preprocess(request, response, this);
+                    handle(handler.Handle.bind(handler), this);
+                })();
+            }
+        }
+        return handled;
     }
 
     Watch(path:string)
