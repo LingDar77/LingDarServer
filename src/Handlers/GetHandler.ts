@@ -32,8 +32,9 @@ export class GetHandler extends ServerHandler
             resolve();
         });
     }
-    Handle(request: Request, response: Response, router:RouterBase, next:()=>void): void {
+    
+    Handle = (request: Request, response: Response, router:RouterBase, next:()=>void)=>{
         router.Get(request, response, next);
-    }
+    };
 
 }

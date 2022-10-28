@@ -10,7 +10,8 @@ export enum ECacheStrategy
 {
     None,
     LastModified,
-    MaxAge
+    MaxAge,
+    Auto
 }
 
 export class StaticRouter extends RouterBase
@@ -18,12 +19,18 @@ export class StaticRouter extends RouterBase
     private dir = './';
     private filter: undefined | ((path: string) => { transform: Transform, ContentEncoding: string } | void);
     private fileMan: undefined | FileManager;
-    private cacheStratgy:ECacheStrategy | ((request:Request)=>ECacheStrategy) = ECacheStrategy.None;
+    private cacheStratgy:ECacheStrategy | ((request:Request)=>ECacheStrategy) = ECacheStrategy.Auto;
     private maxAge: number | undefined;
-
-    constructor(patterm:RegExp | string, private configConteneType = true)
+    private limitedSize:number = 128 * 1024;
+    constructor(patterm:RegExp | string, private resolveContentType = true)
     {
         super(patterm);
+    }
+
+    Limited(size:number)
+    {
+        this.limitedSize = size;
+        return this;
     }
 
     Dir(dir = './')
@@ -71,15 +78,29 @@ export class StaticRouter extends RouterBase
         {
             stratgy = this.cacheStratgy(request);
         }
-        switch (stratgy) {
-        case ECacheStrategy.LastModified:
-        {
-            //check if the client has cache
-            const lastCache = request.headers['if-modified-since'];
-            let version;
-            fs.stat(finalPath)
-                .then(stats =>
+
+        fs.stat(finalPath)
+            .then(stats =>
+            {
+                if(stratgy == ECacheStrategy.Auto)
                 {
+                    if(stats.size > this.limitedSize)
+                    {
+                        stratgy = ECacheStrategy.MaxAge;
+                    }
+                    else
+                    {
+                        stratgy = ECacheStrategy.LastModified;
+                    }
+                }
+
+                switch (stratgy) {
+                case ECacheStrategy.LastModified:
+                {
+                    //check if the client has cache
+                    const lastCache = request.headers['if-modified-since'];
+                    let version;
+
                     if (!lastCache || parseInt(lastCache) != stats.mtime.getTime()) {
                         version = stats.mtime.getTime();
                         response.setHeader('last-modified', version);
@@ -89,32 +110,31 @@ export class StaticRouter extends RouterBase
                         response.statusCode = 304;
                         response.end();
                     }
-                })
-                .catch((err) => {
-                    next();
-                });
-                    
-            break;
-        }
-        case ECacheStrategy.MaxAge:
-        {
-            this.maxAge = this.maxAge ? this.maxAge : 86400;
-            response.setHeader('Cache-Control', 'public, max-age=' + this.maxAge);
-            this.RequestFile(path, finalPath, response, next);
-            break;
-        }
-        default:
-            //None cache strategy
-            this.RequestFile(path, finalPath, response, next);
-            break;
-        }
+                    break;
+                }
+                case ECacheStrategy.MaxAge:
+                {
+                    this.maxAge = this.maxAge ? this.maxAge : 86400;
+                    response.setHeader('Cache-Control', 'public, max-age=' + this.maxAge);
+                    this.RequestFile(path, finalPath, response, next);
+                    break;
+                }
+                default:
+                    //None cache strategy
+                    this.RequestFile(path, finalPath, response, next);
+                    break;
+                }
+            })
+            .catch((err) => {
+                next();
+            });
     }
 
     private RequestFile(path: string, finalPath: string, response: Response, next: () => void, version?: number)
     {
         //handle target
         let target: Writable;
-        if(this.configConteneType)
+        if(this.resolveContentType)
         {
             const type = Types.Get('.' + finalPath.split('.').pop());
             if(type)

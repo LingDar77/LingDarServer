@@ -9,9 +9,9 @@ export class PostHandler extends ServerHandler
         return request.method == 'POST';
     }
 
-    Handle(request: Request, response: Response, router: RouterBase, next: () => void): void {
+    Handle = (request: Request, response: Response, router: RouterBase, next: () => void)=> {
         router.Post(request, response, next);
-    }
+    };
 
     Preprocess(request: Request, response: Response, server: WebServer): Promise<void> {
         return new Promise((resolve)=>{
@@ -60,6 +60,7 @@ export class MultipartHandler extends ServerHandler
         }
         return false;
     }
+
     Preprocess(request: Request, response: Response, server: WebServer): Promise<void> {
         return new Promise((resolve)=>{
             //parse form data
@@ -99,4 +100,5 @@ export class MultipartHandler extends ServerHandler
             });
         });
     }
+    
 }

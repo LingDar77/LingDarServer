@@ -46,6 +46,12 @@ export class WebServer
         this.instance = protocol == 'http' ? http : https;
     }
 
+    Route(router:RouterBase)
+    {
+        this.routers.push(router);
+        return this;
+    }
+
     Handle(handler:ServerHandler)
     {
         this.handlers.push(handler);
@@ -297,7 +303,8 @@ export class WebServer
                 (async () => {
                     handled = true;
                     await handler.Preprocess(request, response, this);
-                    handle(handler.Handle.bind(handler), this);
+                    if(handler.Handle)
+                        handle(handler.Handle.bind(handler), this);
                 })();
             }
         }

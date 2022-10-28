@@ -4,7 +4,7 @@ import {Request, Response} from '../Routers/RouterBase';
 
 export abstract class ServerHandler
 {
-    Handle(request:Request, response:Response, router:RouterBase, next:()=>void){}
+    Handle:((request:Request, response:Response, router:RouterBase, next:()=>void)=>void) | undefined;
     
     Match(request:Request, server:WebServer)
     {
