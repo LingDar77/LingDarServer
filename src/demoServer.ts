@@ -30,7 +30,14 @@ const server = new WebServer('http', cm)
 server.routers.push(new StaticRouter('/*')
     .Dir('./www')
     .FileManager(fm)
-    .CacheStrategy(ECacheStrategy.LastModified));
+    .MaxAge(3600)
+    .CacheStrategy((req)=>{
+        if(req.path.endsWith('.css'))
+        {
+            return ECacheStrategy.MaxAge;
+        }
+        return ECacheStrategy.LastModified;
+    }));
     
 @DefineRouter('/api/test', server)
 class TestRouter extends RouterBase

@@ -1,5 +1,5 @@
-import http from 'http';
-import https from 'https';
+import { Server, createServer as http } from 'http';
+import { ServerOptions as options, createServer as https } from 'https';
 import { promises as fs } from 'fs';
 import { Debounce } from './Tools/Utils';
 import { spawnSync } from 'child_process';
@@ -7,7 +7,7 @@ import { CacheManager } from './Helpers/CacheManager';
 import { RouterBase, Request, Response } from './Routers/RouterBase';
 import { ServerHandler } from './Handlers/ServerHandler';
 
-export type ServerOptions = { maxContentSize?: number } & https.ServerOptions;
+export type ServerOptions = { maxContentSize?: number } & options;
 export const globalRouters =  new Array<[RouterBase, (webServer:WebServer)=>boolean]>();
 
 export function DefineRouter(pathPattern: RegExp | string, targetServer:((webServer:WebServer)=>boolean) | WebServer = (webServer:WebServer)=>true)
@@ -36,7 +36,7 @@ export class WebServer
 {
     private instance;
     public routers = new Array<RouterBase>();
-    public server: http.Server | undefined;
+    public server: Server | undefined;
     public handlers:ServerHandler[] = [];
     private options:ServerOptions = {};
     private onClose= ()=>{};
@@ -78,7 +78,7 @@ export class WebServer
             return a.GetPriority() - b.GetPriority();
         });
 
-        this.server = (this.instance as typeof http).createServer(this.options, async (request, response) =>
+        this.server = (this.instance as typeof http)(this.options, async (request, response) =>
         {
 
             const req = request as Request;
@@ -98,6 +98,9 @@ export class WebServer
         return this;
     }
 
+    /**
+     * @deprecated deprecated since 1.0.13
+     */
     private async ParseHeader(request: Request): Promise<boolean>
     {
         return new Promise((resolve) =>

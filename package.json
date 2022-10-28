@@ -16,13 +16,13 @@
   "author": "LingDar77",
   "license": "ISC",
   "devDependencies": {
+    "@types/ws": "^8.5.3",
     "@types/node": "^18.11.6",
     "@typescript-eslint/eslint-plugin": "^5.38.1",
     "@typescript-eslint/parser": "^5.38.1",
     "eslint": "^8.24.0"
   },
   "dependencies": {
-    "@types/ws": "^8.5.3",
     "ws": "^8.10.0"
   }
 }

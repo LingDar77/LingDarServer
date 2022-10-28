@@ -18,7 +18,7 @@ export class StaticRouter extends RouterBase
     private dir = './';
     private filter: undefined | ((path: string) => { transform: Transform, ContentEncoding: string } | void);
     private fileMan: undefined | FileManager;
-    private cacheStratgy = ECacheStrategy.None;
+    private cacheStratgy:ECacheStrategy | ((request:Request)=>ECacheStrategy) = ECacheStrategy.None;
     private maxAge: number | undefined;
 
     constructor(patterm:RegExp | string, private configConteneType = true)
@@ -55,7 +55,7 @@ export class StaticRouter extends RouterBase
         return this;
     }
 
-    CacheStrategy(strategy: ECacheStrategy)
+    CacheStrategy(strategy: ECacheStrategy | ((request:Request)=>ECacheStrategy))
     {
         this.cacheStratgy = strategy;
         return this;
@@ -66,8 +66,12 @@ export class StaticRouter extends RouterBase
         const path = request.path;
 
         const finalPath = Path.join(this.dir, path == '/' ? 'index.html' : path);
-
-        switch (this.cacheStratgy) {
+        let stratgy = this.cacheStratgy;
+        if(typeof this.cacheStratgy != 'number')
+        {
+            stratgy = this.cacheStratgy(request);
+        }
+        switch (stratgy) {
         case ECacheStrategy.LastModified:
         {
             //check if the client has cache
