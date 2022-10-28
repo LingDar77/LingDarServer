@@ -1,7 +1,7 @@
 
 type ReturnType<T> = T extends (...args: never[]) => infer R ? R : unknown;
 type ParamsType<T> = T extends (...args: infer P) => unknown ? P : unknown;
-export type Constructor<T> = {new(...args:never[]):T};
+export type Constructor<T> = { new(...args: never[]): T };
 
 export const classes = new Array<Constructor<unknown>>;
 
@@ -16,7 +16,7 @@ export function Debounce<T extends unknown[]>(f: (...args: T) => unknown, thresh
     let timer: NodeJS.Timeout;
     return (...args: ParamsType<typeof f>) =>
     {
-        
+
         if (timer)
             clearTimeout(timer);
         timer = setTimeout(() =>
@@ -63,7 +63,7 @@ export const declareClass = <T>(constructor: Constructor<T>) =>
  * @param obj the object to be serialized
  * @returns the result json string
  */
-export function Serialize<T extends object>(obj:T):string
+export function Serialize<T extends object>(obj: T): string
 {
     // const constructor = obj.constructor as {new():T};
     /**
@@ -81,35 +81,31 @@ export function Serialize<T extends object>(obj:T):string
      * }
      */
 
-    return JSON.stringify(obj, (key, val)=>{
+    return JSON.stringify(obj, (key, val) =>
+    {
 
-        if(key == '' && val instanceof Object)
-        {   
-            if(val instanceof Map)
-            {
+        if (key == '' && val instanceof Object) {
+            if (val instanceof Map) {
                 return {
                     classType: 'Map',
                     values: Array.from(val.entries())
                 };
             }
             const vals = {};
-            for(const key in val)
-            {
-                if(typeof val[key] != 'object')
+            for (const key in val) {
+                if (typeof val[key] != 'object')
                     vals[key as keyof typeof vals] = val[key] as never;
-                else
-                {
+                else {
                     vals[key as keyof typeof vals] = JSON.parse(Serialize(val[key])) as never;
                 }
             }
-            return {classType:obj.constructor.name, values:vals};
+            return { classType: obj.constructor.name, values: vals };
         }
-        else
-        {
+        else {
             return val;
         }
     });
-    
+
 }
 
 /**
@@ -118,36 +114,30 @@ export function Serialize<T extends object>(obj:T):string
  * @param json the json string of object
  * @returns the reuslt object
  */
-export function Deserialize<T extends object>(constructor:Constructor<T>, json:string)
+export function Deserialize<T extends object>(constructor: Constructor<T>, json: string)
 {
     new constructor();
-    return JSON.parse(json, (key,val)=>{
+    return JSON.parse(json, (key, val) =>
+    {
 
-        if(val.classType == 'Map')
-        {
+        if (val.classType == 'Map') {
             return new Map(val.values);
         }
-        if(val.classType == 'Array')
-        {
+        if (val.classType == 'Array') {
             const arr = new Array<unknown>();
-            for(const key in val.values)
-            {
+            for (const key in val.values) {
                 arr.push(val.values[key]);
             }
             return arr;
         }
-        if(typeof val =='object' && val != null)
-        {
-            if(val instanceof Array || val instanceof Map)
-            {
+        if (typeof val == 'object' && val != null) {
+            if (val instanceof Array || val instanceof Map) {
                 return val;
             }
-            const constructor = classes.find(item=>item.name == val.classType);
-            if(constructor)
-            { 
+            const constructor = classes.find(item => item.name == val.classType);
+            if (constructor) {
                 const obj = new constructor() as object;
-                for(const key in val.values)
-                {
+                for (const key in val.values) {
                     obj[key as keyof typeof obj] = val.values[key] as never;
                 }
                 return obj;
@@ -155,7 +145,7 @@ export function Deserialize<T extends object>(constructor:Constructor<T>, json:s
             return val;
         }
         return val;
-    })as T;
+    }) as T;
 }
 
 /**
@@ -163,9 +153,10 @@ export function Deserialize<T extends object>(constructor:Constructor<T>, json:s
  * @param f the function that will be measured
  * @returns the mesurement function, that returns the reuslt as milliseconds
  */
-export function Measurement<T extends unknown[]>(f:(...args:T)=>unknown)
+export function Measurement<T extends unknown[]>(f: (...args: T) => unknown)
 {
-    return (...args:ParamsType<typeof f>)=>{
+    return (...args: ParamsType<typeof f>) =>
+    {
         const timeStamp1 = new Date().getTime();
         f(...args);
         const timeStamp2 = new Date().getTime();

@@ -1,21 +1,21 @@
 import http from 'http';
 export type Request = RequestParams & http.IncomingMessage;
 
-interface RequestParams
+export interface RequestParams
 {
     getParams: { [x: string]: string };
     postParams: { [x: string]: string };
     formParams: { [x: string]: string };
     files: { [x: string]: Promise<string> };
     path: string;
-    ip:string;
+    ip: string;
 }
-export type Response = http.ServerResponse & {
-    Write:(chunk:object | string | Buffer, encoding?:BufferEncoding)=>boolean, 
-    End:(message?: string | object | Buffer)=>void,
-} & 
-{End:(code?:number)=>void} &
-{End:(code?:number, message?: string | object | Buffer)=>void}
+
+export type Response = http.ServerResponse &
+{ Write: (chunk: object | string | Buffer, encoding?: BufferEncoding) => boolean } &
+{ End: (message?: string | object | Buffer) => void } &
+{ End: (code?: number) => void } &
+{ End: (code?: number, message?: string | object | Buffer) => void }
 
 export abstract class RouterBase
 {
@@ -34,11 +34,11 @@ export abstract class RouterBase
              *  reg
              *  (\/*)
              */
-           
-            let reg = pattern.replace(/\//g,'\\/');
+
+            let reg = pattern.replace(/\//g, '\\/');
             // \/*
             // \/cache\/*
-            reg = '^'  + reg.replace(/\\\/\*/g, '(\\/.*)$');
+            reg = '^' + reg.replace(/\\\/\*/g, '(\\/.*)$');
 
 
             this.pattern = RegExp(reg);

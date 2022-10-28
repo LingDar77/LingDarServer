@@ -5,16 +5,20 @@ import { RouterBase } from '../Routers/RouterBase';
 
 export class PostHandler extends ServerHandler
 {
-    Match(request: Request): boolean {
+    Match(request: Request): boolean
+    {
         return request.method == 'POST';
     }
 
-    Handle = (request: Request, response: Response, router: RouterBase, next: () => void)=> {
+    Handle = (request: Request, response: Response, router: RouterBase, next: () => void) =>
+    {
         router.Post(request, response, next);
     };
 
-    Preprocess(request: Request, response: Response, server: WebServer): Promise<void> {
-        return new Promise((resolve)=>{
+    Preprocess(request: Request, response: Response, server: WebServer): Promise<void>
+    {
+        return new Promise((resolve) =>
+        {
             //handle post request
             let buffer = Buffer.alloc(0);
             request.postParams = {};
@@ -26,8 +30,7 @@ export class PostHandler extends ServerHandler
             {
                 try {
                     const data = buffer.toString();
-                    if(data != '')
-                    {
+                    if (data != '') {
                         const params = JSON.parse(data);
                         if (params) {
                             request.postParams = params;
@@ -35,8 +38,11 @@ export class PostHandler extends ServerHandler
                     }
                 } catch (error) {
                 }
-                resolve();
+                finally {
+                    resolve();
+                }
             });
+
         });
     }
 }
@@ -45,12 +51,12 @@ export class PostHandler extends ServerHandler
 export class MultipartHandler extends ServerHandler
 {
     private boundary = '';
-    Match(request: Request): boolean {
-        if(request.method != 'POST')
+    Match(request: Request): boolean
+    {
+        if (request.method != 'POST')
             return false;
         const types = request.headers['content-type'];
-        if(types)
-        { 
+        if (types) {
             //handle multipart request
             const results = types.match(/multipart\/form-data; boundary=(.+)/);
             if (results) {
@@ -61,8 +67,10 @@ export class MultipartHandler extends ServerHandler
         return false;
     }
 
-    Preprocess(request: Request, response: Response, server: WebServer): Promise<void> {
-        return new Promise((resolve)=>{
+    Preprocess(request: Request, response: Response, server: WebServer): Promise<void>
+    {
+        return new Promise((resolve) =>
+        {
             //parse form data
             let buffer = Buffer.alloc(0);
             request.formParams = {};
@@ -96,9 +104,9 @@ export class MultipartHandler extends ServerHandler
                         }
                     }
                 }
-                resolve();
             });
+            resolve();
         });
     }
-    
+
 }

@@ -1,10 +1,10 @@
 import { Request, Response, RouterBase } from './RouterBase';
 import { Transform } from 'stream';
-import { FileManager } from '../Helpers/FileManager';
+import { FileManager } from '../Tools/FileManager';
 import { promises as fs } from 'fs';
 import Path from 'path';
 import { Writable } from 'stream';
-import { Types } from '../Tools/ContentTypes';
+import { Types } from '../Constants/ContentTypes';
 
 export enum ECacheStrategy
 {

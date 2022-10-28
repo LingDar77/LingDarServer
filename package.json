@@ -1,6 +1,6 @@
 {
   "name": "lingdar-server",
-  "version": "1.0.13",
+  "version": "1.0.15",
   "description": "",
   "main": "WebServer.js",
   "repository": "https://github.com/LingDar77/LingDarServer.git",
@@ -16,13 +16,15 @@
   "author": "LingDar77",
   "license": "ISC",
   "devDependencies": {
-    "@types/ws": "^8.5.3",
     "@types/node": "^18.11.6",
+    "@types/ws": "^8.5.3",
     "@typescript-eslint/eslint-plugin": "^5.38.1",
     "@typescript-eslint/parser": "^5.38.1",
-    "eslint": "^8.24.0"
+    "eslint": "^8.24.0",
+    "@types/request-ip": "^0.0.37"
   },
   "dependencies": {
+    "request-ip": "^3.3.0",
     "ws": "^8.10.0"
   }
 }

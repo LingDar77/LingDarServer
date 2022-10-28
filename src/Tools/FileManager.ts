@@ -12,9 +12,8 @@ export interface IFileManConfig
 
 export interface IFileCache
 {
-    conctent: Buffer;
+    content: Buffer;
     modifiedTime: Date;
-
 }
 
 export class FileManager
@@ -49,7 +48,7 @@ export class FileManager
 
         if (this.lastingTime > 0) {
             let size = 0;
-            for (const item of this.caches) size = + item[1].conctent.length;
+            for (const item of this.caches) size = + item[1].content.length;
             size /= 1024 * 1024;
 
             this.info.cacheSize = size;
@@ -58,7 +57,7 @@ export class FileManager
             while (size >= this.config.CacheMaxSize) {
                 const cache = this.caches.Pop();
                 if (cache?.val) {
-                    let freeSize = cache.val?.conctent.length;
+                    let freeSize = cache.val?.content.length;
                     freeSize /= 1024 * 1024;
                     size -= freeSize;
                     console.log(`releasing cache: ${cache.key}, sizing: ${freeSize} MB`);
@@ -133,7 +132,7 @@ export class FileManager
                 const cache = this.caches.Get(path);
                 if (cache && (!version || version == cache?.modifiedTime.getTime())) {
                 //cache hit 
-                    target.write(cache.conctent, err =>
+                    target.write(cache.content, err =>
                     {
                         if (err)
                             reject(err);
@@ -152,7 +151,7 @@ export class FileManager
                         .then(async (stats) =>
                         {
                             const data = await fs.readFile(path);
-                            this.caches.Set(path, { conctent: data, modifiedTime: stats.mtime });
+                            this.caches.Set(path, { content: data, modifiedTime: stats.mtime });
                             target.write(data, err =>
                             {
                                 if (!err) {

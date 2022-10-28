@@ -3,30 +3,29 @@ import { ServerOptions as options, createServer as https } from 'https';
 import { promises as fs } from 'fs';
 import { Debounce } from './Tools/Utils';
 import { spawnSync } from 'child_process';
-import { CacheManager } from './Helpers/CacheManager';
+import { CacheManager } from './Tools/CacheManager';
 import { RouterBase, Request, Response } from './Routers/RouterBase';
 import { ServerHandler } from './Handlers/ServerHandler';
+import { ServerRecorder } from './Tools/ServerRocorder';
+import ip from 'request-ip';
+
 
 export type ServerOptions = { maxContentSize?: number } & options;
-export const globalRouters =  new Array<[RouterBase, (webServer:WebServer)=>boolean]>();
+export const globalRouters = new Array<[RouterBase, (webServer: WebServer) => boolean]>();
 
-export function DefineRouter(pathPattern: RegExp | string, targetServer:((webServer:WebServer)=>boolean) | WebServer = (webServer:WebServer)=>true)
+export function DefineRouter(pathPattern: RegExp | string, targetServer: ((webServer: WebServer) => boolean) | WebServer = (webServer: WebServer) => true)
 {
     return <T extends { new(p: RegExp | string): RouterBase }>(constructor: T) =>
     {
-        if(targetServer instanceof WebServer)
-        {
-            if(targetServer)
-            {
+        if (targetServer instanceof WebServer) {
+            if (targetServer) {
                 targetServer.routers.push(new constructor(pathPattern));
             }
-            else
-            {
-                globalRouters.push([new constructor(pathPattern), (webServer)=>webServer == targetServer]);
+            else {
+                globalRouters.push([new constructor(pathPattern), (webServer) => webServer == targetServer]);
             }
         }
-        else
-        {
+        else {
             globalRouters.push([new constructor(pathPattern), targetServer]);
         }
     };
@@ -34,25 +33,32 @@ export function DefineRouter(pathPattern: RegExp | string, targetServer:((webSer
 
 export class WebServer
 {
-    private instance;
     public routers = new Array<RouterBase>();
     public server: Server | undefined;
-    public handlers:ServerHandler[] = [];
-    private options:ServerOptions = {};
-    private onClose= ()=>{};
-    
+    public handlers: ServerHandler[] = [];
+    private instance;
+    private options: ServerOptions = {};
+    private onClose = () => { };
+    private recorder: ServerRecorder | undefined;
+
     constructor(protocol: 'http' | 'https' = 'http', public readonly cm?: CacheManager)
     {
         this.instance = protocol == 'http' ? http : https;
     }
 
-    Route(router:RouterBase)
+    Record(recorder: ServerRecorder)
+    {
+        this.recorder = recorder;
+        return this;
+    }
+
+    Route(router: RouterBase)
     {
         this.routers.push(router);
         return this;
     }
 
-    Handle(handler:ServerHandler)
+    Handle(handler: ServerHandler)
     {
         this.handlers.push(handler);
         return this;
@@ -64,7 +70,7 @@ export class WebServer
         return this;
     }
 
-    OnClose(onClose:()=>void)
+    OnClose(onClose: () => void)
     {
         this.onClose = onClose;
         return this;
@@ -72,10 +78,8 @@ export class WebServer
 
     StartServer(port = 8080)
     {
-        for(const router of globalRouters)
-        {
-            if(router[1](this))
-            {
+        for (const router of globalRouters) {
+            if (router[1](this)) {
                 this.routers.push(router[0]);
             }
         }
@@ -86,21 +90,24 @@ export class WebServer
 
         this.server = (this.instance as typeof http)(this.options, async (request, response) =>
         {
-
             const req = request as Request;
             const res = response as Response;
-            if (!this.HandleRequest(req, res))
-            {
+            if (!await this.HandleRequest(req, res)) {
                 res.statusCode = 404;
                 res.end();
-                return;
             }
+            this.recorder?.Record(req);
         });
 
         this.server.headersTimeout = 3200;
 
         this.server.listen(port);
-        this.server.on('close', this.onClose);
+        this.server.on('close', () =>
+        {
+            this.cm?.Destory();
+            this.recorder?.Destory();
+            this.onClose();
+        });
         return this;
     }
 
@@ -123,14 +130,14 @@ export class WebServer
             request.formParams = {};
             request.files = {};
             request.ip = request.headers['host'] ?? '';
-            
+
             //parse get params
             const size = parseInt(request.headers['content-length'] ?? '0');
             if (size > (this.options.maxContentSize ?? 1024 * 1024 * 20)) {
                 request.socket.destroy();
                 resolve(false);
             }
-            
+
             if (request.method == 'GET') {
                 //handle get parts
                 if (request.url) {
@@ -151,8 +158,7 @@ export class WebServer
             }
             else {
                 const types = request.headers['content-type'];
-                if(types)
-                { 
+                if (types) {
                     //handle multipart request
                     const results = types.match(/multipart\/form-data; boundary=(.+)/);
                     if (results) {
@@ -177,7 +183,7 @@ export class WebServer
                                 let fname = parts[2] ? parts[2].split('=')[1].split('\r\n')[0].slice(1, -1) : parts[2];
                                 if (!fname) {
                                     request.formParams[name] = body.slice(0, -2);
-    
+
                                 }
                                 else {
                                     fname = Buffer.from(fname, 'binary').toString();
@@ -191,7 +197,7 @@ export class WebServer
                         });
                     }
                 }
-                if (request.method == 'POST') { 
+                if (request.method == 'POST') {
                     //handle post request
                     let buffer = Buffer.alloc(0);
                     request.on('data', (data: Buffer) =>
@@ -217,101 +223,93 @@ export class WebServer
         });
     }
 
-    private HandleRequest(request:Request, response:Response)
+    private HandleRequest(request: Request, response: Response)
     {
-        try {
-            request.path = decodeURI(request.url ?? '/');
-        } catch (error) {
-            request.socket.destroy();
-            return false;
-        }
-        const size = parseInt(request.headers['content-length'] ?? '0');
-        if (size > (this.options.maxContentSize ?? 1024 * 1024 * 20)) {
-            request.socket.destroy();
-            return false;
-        }
-        request.ip = request.headers['host'] ?? '';
-
-        response.Write = (chunk:object | string | Buffer, encoding:BufferEncoding = 'utf-8')=>
+        response.Write = (chunk: object | string | Buffer, encoding: BufferEncoding = 'utf-8') =>
         {
-            if(typeof chunk == 'object' )
+            if (typeof chunk == 'object')
                 return response.write(JSON.stringify(chunk), encoding);
             else
                 return response.write(chunk, encoding);
         };
-        
-        response.End = (...args)=>
+        response.End = (...args) =>
         {
-            if(typeof args[0] == 'number')
-            {
-                if(args[1])
-                {
+            if (typeof args[0] == 'number') {
+                if (args[1]) {
                     response.Write(args[1] as string);
                     response.statusCode = args[0];
                     response.end();
                 }
-                else
-                {
+                else {
                     response.statusCode = args[0];
                     response.end();
                 }
             }
-            else if(args[0])
-            {
+            else if (args[0]) {
                 response.Write(args[0] as string);
                 response.end();
             }
-            else
-            {
+            else {
                 response.end();
             }
         };
-
-        response.setHeader('X-Frame-Options', 'SAMEORIGIN');
-        response.setHeader('Content-Security-Policy', 'img-src *; script-src \'self\'; style-src \'self\' \'unsafe-inline\'; frame-ancestors \'self\'');
-        function handle(f:(req:Request,res:Response, router:RouterBase, next:()=>void)=>void, server:WebServer)
+        function handle(f: (req: Request, res: Response, router: RouterBase, next: () => void) => void, server: WebServer)
         {
-            let next = () => { };
-            function* iterate(routers: Array<RouterBase>)
-            {
-                for (const router of routers) {
-
-                    const results = request.path.match(router.pattern);
-                    if (results) {
-                        if(results[1])
-                            request.path = results[1];
-                        f(request, response, router, next);
-                        yield;
+            let going = false;
+            for (const router of server.routers) {
+                const next = () => going = true;
+                const results = request.path.match(router.pattern);
+                if (results) {
+                    if (results[1])
+                        request.path = results[1];
+                    going = false;
+                    f(request, response, router, next);
+                    if (!going) {
+                        break;
                     }
-
                 }
-                response.statusCode = 404;
-                response.end();
             }
-            const loop = iterate(server.routers);
-            next = () =>
-            {
-                process.nextTick(loop.next.bind(loop));
-            };
-            loop.next();
         }
-        let handled = false;
-        for(const handler of this.handlers)
+
+        return new Promise<boolean>((resolve) =>
         {
-            if(handler.Match(request, this))
-            {
-                (async () => {
-                    handled = true;
-                    await handler.Preprocess(request, response, this);
-                    if(handler.Handle)
-                        handle(handler.Handle.bind(handler), this);
-                })();
+            try {
+                request.path = decodeURI(request.url ?? '/');
+            } catch (error) {
+                request.socket.destroy();
+                resolve(false);
+                return;
             }
-        }
-        return handled;
+
+            const size = parseInt(request.headers['content-length'] ?? '0');
+            if (size > (this.options.maxContentSize ?? 1024 * 1024 * 20)) {
+                request.socket.destroy();
+                resolve(false);
+                return;
+            }
+
+            request.ip = ip.getClientIp(request) ?? 'unknown';
+            response.setHeader('X-Frame-Options', 'SAMEORIGIN');
+            response.setHeader('Content-Security-Policy', 'img-src *; script-src \'self\'; style-src \'self\' \'unsafe-inline\'; frame-ancestors \'self\'');
+
+            (async () =>
+            {
+                for (const handler of this.handlers) {
+                    if (handler.Match(request, this)) {
+                        await handler.Preprocess(request, response, this);
+                        if (handler.Handle) {
+                            handle(handler.Handle.bind(handler), this);
+                        }
+                    }
+                }
+                resolve(true);
+
+            })();
+
+        });
     }
 
-    Watch(path:string)
+    Watch(path: string)
     {
         (async () =>
         {
@@ -320,7 +318,7 @@ export class WebServer
             {
                 process.addListener('exit', () =>
                 {
-                    spawnSync('node', [process.argv[1]], { stdio: 'inherit', shell: true, windowsHide:true });
+                    spawnSync('node', [process.argv[1]], { stdio: 'inherit', shell: true, windowsHide: true });
                 });
                 console.clear();
                 console.log('Changes detected, restarting...');
@@ -330,12 +328,12 @@ export class WebServer
             process.on('SIGINT', () =>
             {
                 this.onClose();
-                if(this.server)
+                if (this.server)
                     this.server.close();
                 process.exit();
             });
             for await (const event of watcher) {
-                if(event.eventType == 'change')
+                if (event.eventType == 'change')
                     response();
             }
         })();
