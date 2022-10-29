@@ -16,12 +16,16 @@ const cm = new CacheManager({ persistentDir: './www/cache', tempDir: './www/temp
 const socketHandler = new WebSocketHandler();
 
 const server = new WebServer('http', cm)
-    .Watch(__filename)
+    // .Watch(__filename)
     .Handle(new GetHandler())
     .Handle(new MultipartHandler())
     .Handle(new PostHandler())
     .Handle(socketHandler)
-    .Record(new ServerRecorder('./records'));
+    // .Record(new ServerRecorder('./Records'))
+    .OnClose(() =>
+    {
+        console.log('Server closed');
+    });
 
 
 server.Route(new StaticRouter('/*')
@@ -116,6 +120,6 @@ class LoginRouter extends RouterBase
     }
 }
 
-server.StartServer(1886);
+server.StartServer(8080);
 console.clear();
-console.log('Server started running at: http://localhost:1886');
+console.log('Server started running at: http://localhost:8080');

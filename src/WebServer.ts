@@ -8,6 +8,7 @@ import { RouterBase, Request, Response } from './Routers/RouterBase';
 import { ServerHandler } from './Handlers/ServerHandler';
 import { ServerRecorder } from './Tools/ServerRocorder';
 import ip from 'request-ip';
+import { RequestFilter } from './Tools/RequestFilter';
 
 
 export type ServerOptions = { maxContentSize?: number } & options;
@@ -40,6 +41,7 @@ export class WebServer
     private options: ServerOptions = {};
     private onClose = () => { };
     private recorder: ServerRecorder | undefined;
+    private filter: RequestFilter | undefined;
 
     constructor(protocol: 'http' | 'https' = 'http', public readonly cm?: CacheManager)
     {
@@ -96,7 +98,8 @@ export class WebServer
                 res.statusCode = 404;
                 res.end();
             }
-            this.recorder?.Record(req);
+            else
+                this.recorder?.Record(req);
         });
 
         this.server.headersTimeout = 3200;
@@ -228,10 +231,16 @@ export class WebServer
 
         return new Promise<boolean>((resolve) =>
         {
+
             try {
                 request.path = decodeURI(request.url ?? '/');
             } catch (error) {
                 request.socket.destroy();
+                resolve(false);
+                return;
+            }
+
+            if (this.filter && !this.filter.Match(request)) {
                 resolve(false);
                 return;
             }
@@ -248,6 +257,7 @@ export class WebServer
             response.setHeader('Content-Security-Policy', 'img-src *; script-src \'self\'; style-src \'self\' \'unsafe-inline\'; frame-ancestors \'self\'');
 
             response = Response(response);
+
 
             function handle(f: (req: Request, res: Response, router: RouterBase, next: () => void) => void, server: WebServer)
             {
@@ -314,4 +324,10 @@ export class WebServer
         })();
         return this;
     }
+
+    Filter(filter: RequestFilter)
+    {
+        this.filter = filter;
+    }
+
 }

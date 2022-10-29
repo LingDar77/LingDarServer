@@ -21,11 +21,11 @@ export class PostHandler extends ServerHandler
         {
             //handle post request
             let buffer = Buffer.alloc(0);
-            request.postParams = {};
             request.on('data', (data: Buffer) =>
             {
                 buffer = Buffer.concat([buffer, data]);
             });
+
             request.on('end', () =>
             {
                 try {
@@ -73,8 +73,6 @@ export class MultipartHandler extends ServerHandler
         {
             //parse form data
             let buffer = Buffer.alloc(0);
-            request.formParams = {};
-            request.files = {};
             request.on('data', (data: Buffer) =>
             {
                 buffer = Buffer.concat([buffer, data]);
@@ -92,14 +90,16 @@ export class MultipartHandler extends ServerHandler
                     const name = parts[1].split('=')[1].slice(1, -1);
                     let fname = parts[2] ? parts[2].split('=')[1].split('\r\n')[0].slice(1, -1) : parts[2];
                     if (!fname) {
+                        if (!request.formParams)
+                            request.formParams = {};
                         request.formParams[name] = body.slice(0, -2);
 
                     }
                     else {
                         fname = Buffer.from(fname, 'binary').toString();
-                        //start handle uploading, send an upload id to client
-                        //this id can be used to query the progress of this upload
                         if (server.cm) {
+                            if (!request.files)
+                                request.files = {};
                             request.files[fname] = server.cm.CacheFile(Buffer.from(body, 'binary'), fname);
                         }
                     }
