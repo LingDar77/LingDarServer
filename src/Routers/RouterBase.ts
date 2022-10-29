@@ -17,9 +17,47 @@ export type Response = http.ServerResponse &
 { End: (code?: number) => void } &
 { End: (code?: number, message?: string | object | Buffer) => void }
 
+export function Response(res: http.ServerResponse)
+{
+    const response = res as Response;
+
+    response.Write = (chunk: object | string | Buffer, encoding: BufferEncoding = 'utf-8') =>
+    {
+        if (typeof chunk == 'object')
+            return response.write(JSON.stringify(chunk), encoding);
+        else
+            return response.write(chunk, encoding);
+    };
+
+    response.End = (...args) =>
+    {
+        if (typeof args[0] == 'number') {
+            if (args[1]) {
+                response.Write(args[1] as string);
+                response.statusCode = args[0];
+                response.end();
+            }
+            else {
+                response.statusCode = args[0];
+                response.end();
+            }
+        }
+        else if (args[0]) {
+            response.Write(args[0] as string);
+            response.end();
+        }
+        else {
+            response.end();
+        }
+    };
+
+    return response;
+}
+
 export abstract class RouterBase
 {
     public pattern: RegExp;
+    
     constructor(pattern: RegExp | string)
     {
         if (typeof pattern == 'string') {

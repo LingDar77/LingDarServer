@@ -225,51 +225,6 @@ export class WebServer
 
     private HandleRequest(request: Request, response: Response)
     {
-        response.Write = (chunk: object | string | Buffer, encoding: BufferEncoding = 'utf-8') =>
-        {
-            if (typeof chunk == 'object')
-                return response.write(JSON.stringify(chunk), encoding);
-            else
-                return response.write(chunk, encoding);
-        };
-        response.End = (...args) =>
-        {
-            if (typeof args[0] == 'number') {
-                if (args[1]) {
-                    response.Write(args[1] as string);
-                    response.statusCode = args[0];
-                    response.end();
-                }
-                else {
-                    response.statusCode = args[0];
-                    response.end();
-                }
-            }
-            else if (args[0]) {
-                response.Write(args[0] as string);
-                response.end();
-            }
-            else {
-                response.end();
-            }
-        };
-        function handle(f: (req: Request, res: Response, router: RouterBase, next: () => void) => void, server: WebServer)
-        {
-            let going = false;
-            for (const router of server.routers) {
-                const next = () => going = true;
-                const results = request.path.match(router.pattern);
-                if (results) {
-                    if (results[1])
-                        request.path = results[1];
-                    going = false;
-                    f(request, response, router, next);
-                    if (!going) {
-                        break;
-                    }
-                }
-            }
-        }
 
         return new Promise<boolean>((resolve) =>
         {
@@ -282,7 +237,7 @@ export class WebServer
             }
 
             const size = parseInt(request.headers['content-length'] ?? '0');
-            if (size > (this.options.maxContentSize ?? 1024 * 1024 * 20)) {
+            if (size > (this.options.maxContentSize ?? 1024 * 1024)) {
                 request.socket.destroy();
                 resolve(false);
                 return;
@@ -291,6 +246,26 @@ export class WebServer
             request.ip = ip.getClientIp(request) ?? 'unknown';
             response.setHeader('X-Frame-Options', 'SAMEORIGIN');
             response.setHeader('Content-Security-Policy', 'img-src *; script-src \'self\'; style-src \'self\' \'unsafe-inline\'; frame-ancestors \'self\'');
+
+            response = Response(response);
+
+            function handle(f: (req: Request, res: Response, router: RouterBase, next: () => void) => void, server: WebServer)
+            {
+                let going = false;
+                for (const router of server.routers) {
+                    const next = () => going = true;
+                    const results = request.path.match(router.pattern);
+                    if (results) {
+                        if (results[1])
+                            request.path = results[1];
+                        going = false;
+                        f(request, response, router, next);
+                        if (!going) {
+                            break;
+                        }
+                    }
+                }
+            }
 
             (async () =>
             {
