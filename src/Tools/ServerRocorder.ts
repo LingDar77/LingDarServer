@@ -4,7 +4,6 @@ import { Request } from '../Routers/RouterBase';
 import { resolve as resolvePath } from 'path';
 import { FormatDate } from './Utils';
 import { FileHandle } from 'fs/promises';
-
 export class ServerRecorder
 {
     private file: FileHandle | undefined;

@@ -1,6 +1,6 @@
 {
   "name": "lingdar-server",
-  "version": "1.0.15",
+  "version": "1.0.16",
   "description": "",
   "main": "WebServer.js",
   "repository": "https://github.com/LingDar77/LingDarServer.git",

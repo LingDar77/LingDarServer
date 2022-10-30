@@ -111,6 +111,15 @@ export class WebServer
             this.recorder?.Destory();
             this.onClose();
         });
+
+        process.on('SIGINT', () =>
+        {
+            this.onClose();
+            if (this.server)
+                this.server.close();
+            process.exit();
+        });
+
         return this;
     }
 
@@ -226,10 +235,10 @@ export class WebServer
         });
     }
 
-    private HandleRequest(request: Request, response: Response)
+    private HandleRequest(request: Request, response: Response): Promise<boolean>
     {
 
-        return new Promise<boolean>((resolve) =>
+        return new Promise((resolve) =>
         {
 
             try {
@@ -239,6 +248,8 @@ export class WebServer
                 resolve(false);
                 return;
             }
+
+            request.ip = ip.getClientIp(request) ?? 'unknown';
 
             if (this.filter && !this.filter.Match(request)) {
                 resolve(false);
@@ -252,12 +263,10 @@ export class WebServer
                 return;
             }
 
-            request.ip = ip.getClientIp(request) ?? 'unknown';
             response.setHeader('X-Frame-Options', 'SAMEORIGIN');
             response.setHeader('Content-Security-Policy', 'img-src *; script-src \'self\'; style-src \'self\' \'unsafe-inline\'; frame-ancestors \'self\'');
 
             response = Response(response);
-
 
             function handle(f: (req: Request, res: Response, router: RouterBase, next: () => void) => void, server: WebServer)
             {
@@ -309,14 +318,7 @@ export class WebServer
                 console.log('Changes detected, restarting...');
                 process.emit('SIGINT');
             }, 200);
-
-            process.on('SIGINT', () =>
-            {
-                this.onClose();
-                if (this.server)
-                    this.server.close();
-                process.exit();
-            });
+            
             for await (const event of watcher) {
                 if (event.eventType == 'change')
                     response();

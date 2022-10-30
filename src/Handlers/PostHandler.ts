@@ -2,7 +2,6 @@ import { Request, Response } from '../Routers/RouterBase';
 import { WebServer } from '../WebServer';
 import { ServerHandler } from './ServerHandler';
 import { RouterBase } from '../Routers/RouterBase';
-
 export class PostHandler extends ServerHandler
 {
     Match(request: Request): boolean
@@ -46,7 +45,6 @@ export class PostHandler extends ServerHandler
         });
     }
 }
-
 
 export class MultipartHandler extends ServerHandler
 {
