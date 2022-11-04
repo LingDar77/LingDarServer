@@ -59,7 +59,7 @@ export class CacheManager
                             {
                                 size += stats.size;
                                 sizeMap.set(file, stats.size);
-                            });
+                            }).catch(()=>{});
                     }
                     const max = (this.config.maxTempSize ?? 1024) * 1014 * 1024;
                     while (size > max) {
@@ -67,12 +67,12 @@ export class CacheManager
 
                         if (file?.val) {
                             const fsize = sizeMap.get(file.val);
-                            await fs.rm(Path.join(this.config.tempDir, file.val), { recursive: true });
+                            await fs.rm(Path.join(this.config.tempDir, file.val), { recursive: true }).catch(()=>{});
                             size -= fsize ?? 0;
                         }
                         else {
-                            await fs.rm(this.config.tempDir, { recursive: true });
-                            await fs.mkdir(this.config.tempDir);
+                            await fs.rm(this.config.tempDir, { recursive: true }).catch(()=>{});
+                            await fs.mkdir(this.config.tempDir).catch(()=>{});
                             return;
                         }
                     }
@@ -80,7 +80,7 @@ export class CacheManager
                 })
                 .catch(() =>
                 {
-                    fs.mkdir(this.config.persistentDir);
+                    fs.mkdir(this.config.persistentDir).catch(()=>{});
                 });
 
         });
@@ -140,8 +140,8 @@ export class CacheManager
     async ClearPersistents()
     {
         this.persistents.clear();
-        sfs.rmSync(this.config.persistentDir);
-        fs.mkdir(this.config.persistentDir);
+        await fs.rm(this.config.persistentDir,{recursive:true}).catch(()=>{});
+        await fs.mkdir(this.config.persistentDir).catch(()=>{});
     }
 
     async QuerySha256(hash: string, source: Iterable<[string, string]>)

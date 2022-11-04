@@ -1,11 +1,11 @@
 {
   "name": "lingdar-server",
-  "version": "1.0.17",
+  "version": "1.0.18",
   "description": "",
   "main": "WebServer.js",
   "repository": "https://github.com/LingDar77/LingDarServer.git",
   "scripts": {
-    "test": "tsc --project ./ && node ./demoServer.js",
+    "test": "npm run build && node ./demoServer.js",
     "build": "tsc --project ./"
   },
   "keywords": [

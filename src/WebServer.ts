@@ -42,7 +42,9 @@ export class WebServer
     private recorder: ServerRecorder | undefined;
     private filter: RequestFilter | undefined;
 
-    constructor( public readonly cm?: CacheManager) { }
+    constructor( public readonly cm?: CacheManager) {
+        process.setMaxListeners(16);
+    }
     
     Record(recorder: ServerRecorder)
     {
@@ -85,7 +87,7 @@ export class WebServer
                 {
                     spawnSync('node', [process.argv[1]], { stdio: 'inherit', shell: true, windowsHide: true });
                 });
-                console.clear();
+                // console.clear();
                 console.log('Changes detected, restarting...');
                 process.emit('SIGINT');
             }, 200);

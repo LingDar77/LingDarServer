@@ -7,24 +7,24 @@ import './Routers/CorsRouter';
 import { GetHandler } from './Handlers/GetHandler';
 import { MultipartHandler, PostHandler } from './Handlers/PostHandler';
 import { ServerRecorder } from './Tools/ServerRocorder';
-
+import fs from 'fs';
 const fm = new FileManager()
     .Dirs(['./www']);
 const cm = new CacheManager({ persistentDir: './www/cache', tempDir: './www/temp' });
 
 const server = new WebServer(cm)
+    .Options({
+        cert: fs.readFileSync('./www/certs/saltyfishcontainer.eu.org_bundle.crt'),
+        key: fs.readFileSync('./www/certs/saltyfishcontainer.eu.org.key'),
+    })
     // .Watch(__filename)
     .Handle(new GetHandler())
-    .Handle(new MultipartHandler())
-    .Handle(new PostHandler())
-    // .Record(new S erverRecorder('./Records'))
-    .OnClose(() => console.log('Server closed'));
+    .Handle(new PostHandler());
+    // .Record(new ServerRecorder('./Records'));
 
-server.Route(new StaticRouter('/*')
+server.Route(new StaticRouter('/app/calendar/*')
     .Dir('./www')
     .FileManager(fm)
-    .MaxAge(3600)
-    .CacheStrategy(ECacheStrategy.LastModified)
 );
 
 @DefineRouter('/api/test', server)
@@ -32,16 +32,12 @@ class TestRouter extends RouterBase
 {
     Post(request: Request, response: Response, next: () => void): void
     {
-        if (request.files) {
-            console.log(request.files);
-        }
-        // console.log(request.postParams);
-
-        response.End(request.postParams);
+        response.Write(request.postParams);
+        response.end();
     }
     Get(request: Request, response: Response, next: () => void): void
     {
-        response.End(200, request.getParams);
+        response.End(200, 'okk');
     }
 }
 
@@ -112,6 +108,7 @@ class LoginRouter extends RouterBase
     }
 }
 
-server.StartServer(8080);
-console.clear();
-console.log('Server started running at: http://localhost:8080');
+server.StartServer(18886, 'https');
+server.StartServer(18887, 'http');
+// console.clear();
+console.log('Server started running at: https://localhost:18886');
