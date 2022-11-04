@@ -6,27 +6,19 @@ import { CacheManager } from './Tools/CacheManager';
 import './Routers/CorsRouter';
 import { GetHandler } from './Handlers/GetHandler';
 import { MultipartHandler, PostHandler } from './Handlers/PostHandler';
-import { WebSocketHandler } from './Handlers/WebSocketHandler';
 import { ServerRecorder } from './Tools/ServerRocorder';
 
 const fm = new FileManager()
     .Dirs(['./www']);
 const cm = new CacheManager({ persistentDir: './www/cache', tempDir: './www/temp' });
 
-const socketHandler = new WebSocketHandler();
-
-const server = new WebServer('http', cm)
+const server = new WebServer(cm)
     // .Watch(__filename)
     .Handle(new GetHandler())
     .Handle(new MultipartHandler())
     .Handle(new PostHandler())
-    .Handle(socketHandler)
-    // .Record(new ServerRecorder('./Records'))
-    .OnClose(() =>
-    {
-        console.log('Server closed');
-    });
-
+    // .Record(new S erverRecorder('./Records'))
+    .OnClose(() => console.log('Server closed'));
 
 server.Route(new StaticRouter('/*')
     .Dir('./www')

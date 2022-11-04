@@ -5,6 +5,7 @@ import Path from 'path';
 import crypto from 'crypto';
 import { clearInterval } from 'timers';
 import { Serialize, Deserialize } from './Utils';
+import { nextTick } from 'process';
 
 export interface ICacheManagerConfig
 {
@@ -27,16 +28,8 @@ export class CacheManager
     constructor(private config: ICacheManagerConfig)
     {
         this.LoadPersistents();
-        fs.access(config.persistentDir)
-            .catch(() =>
-            {
-                fs.mkdir(config.persistentDir);
-            });
-        fs.access(config.tempDir)
-            .catch(() =>
-            {
-                fs.mkdir(config.tempDir);
-            });
+        fs.mkdir(config.persistentDir).catch(()=>{});
+        fs.mkdir(config.tempDir).catch(()=>{});
         this.timer = setInterval(this.Check.bind(this), config.checkTime ?? 2000);
     }
 
@@ -53,7 +46,7 @@ export class CacheManager
 
     private Check()
     {
-        {
+        nextTick(()=>{
 
             fs.readdir(this.config.tempDir)
                 .then(async files =>
@@ -90,13 +83,13 @@ export class CacheManager
                     fs.mkdir(this.config.persistentDir);
                 });
 
-        }
+        });
     }
 
     Destory()
     {
         clearInterval(this.timer);
-        sfs.rmdirSync(this.config.tempDir, { recursive: true });
+        sfs.rmSync(this.config.tempDir, { recursive: true });
         //record persistents map
         if (this.persistents.size) {
             const json = Serialize(this.persistents);
@@ -147,7 +140,7 @@ export class CacheManager
     async ClearPersistents()
     {
         this.persistents.clear();
-        sfs.rmdirSync(this.config.persistentDir);
+        sfs.rmSync(this.config.persistentDir);
         fs.mkdir(this.config.persistentDir);
     }
 

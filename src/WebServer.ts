@@ -9,8 +9,9 @@ import { ServerHandler } from './Handlers/ServerHandler';
 import { ServerRecorder } from './Tools/ServerRocorder';
 import ip from 'request-ip';
 import { RequestFilter } from './Tools/RequestFilter';
+import { nextTick } from 'process';
 
-
+        
 export type ServerOptions = { maxContentSize?: number } & options;
 export const globalRouters = new Array<[RouterBase, (webServer: WebServer) => boolean]>();
 
@@ -31,23 +32,18 @@ export function DefineRouter(pathPattern: RegExp | string, targetServer: ((webSe
         }
     };
 }
-
 export class WebServer
-{
+{   
     public routers = new Array<RouterBase>();
-    public server: Server | undefined;
+    public servers = new Array<Server>();
     public handlers: ServerHandler[] = [];
-    private instance;
     private options: ServerOptions = {};
     private onClose = () => { };
     private recorder: ServerRecorder | undefined;
     private filter: RequestFilter | undefined;
 
-    constructor(protocol: 'http' | 'https' = 'http', public readonly cm?: CacheManager)
-    {
-        this.instance = protocol == 'http' ? http : https;
-    }
-
+    constructor( public readonly cm?: CacheManager) { }
+    
     Record(recorder: ServerRecorder)
     {
         this.recorder = recorder;
@@ -78,19 +74,74 @@ export class WebServer
         return this;
     }
 
-    StartServer(port = 8080)
+    Watch(path: string)
     {
+        (async () =>
+        {
+            const watcher = fs.watch(path, { recursive: true });
+            const response = Debounce(() =>
+            {
+                process.addListener('exit', () =>
+                {
+                    spawnSync('node', [process.argv[1]], { stdio: 'inherit', shell: true, windowsHide: true });
+                });
+                console.clear();
+                console.log('Changes detected, restarting...');
+                process.emit('SIGINT');
+            }, 200);
+            
+            for await (const event of watcher) {
+                if (event.eventType == 'change')
+                    response();
+            }
+        })();
+        return this;
+    }
+
+    Filter(filter: RequestFilter)
+    {
+        this.filter = filter;
+    }
+    
+    StartServer(port:number):WebServer;
+    StartServer(protocol:'https'|'http'):WebServer;
+    StartServer(protocol:'https'|'http', port:number):WebServer;
+    StartServer(port:number, protocol:'https'|'http'):WebServer;
+    StartServer(...args:unknown[]):WebServer
+    {
+        let port = 8080;
+        let protocol = 'http';
+        if(typeof args[0] == 'number')
+        {
+            port = args[0];
+        }
+        else
+        {
+            protocol =  (args[0] as string) ?? 'http';
+        }
+        if(typeof args[1] == 'number')
+        {
+            port = args[1];
+        }
+        else
+        {
+            protocol = (args[1] as string) ?? 'http';
+        }
+
+        const instance = protocol == 'https' ? https : http;
+
         for (const router of globalRouters) {
             if (router[1](this)) {
                 this.routers.push(router[0]);
             }
         }
+
         this.routers.sort((a, b) =>
         {
             return a.GetPriority() - b.GetPriority();
         });
 
-        this.server = (this.instance as typeof http)(this.options, async (request, response) =>
+        const server = (instance as typeof http)(this.options, async (request, response) =>
         {
             const req = request as Request;
             const res = response as Response;
@@ -102,10 +153,10 @@ export class WebServer
                 this.recorder?.Record(req);
         });
 
-        this.server.headersTimeout = 3200;
+        server.headersTimeout = 3200;
 
-        this.server.listen(port);
-        this.server.on('close', () =>
+        server.listen(port);
+        server.on('close', () =>
         {
             this.cm?.Destory();
             this.recorder?.Destory();
@@ -114,125 +165,19 @@ export class WebServer
 
         process.on('SIGINT', () =>
         {
-            this.onClose();
-            if (this.server)
-                this.server.close();
-            process.exit();
+            if(this.servers.length)
+            {
+                const server = this.servers.pop();
+                server?.close();
+            }
+            if(this.servers.length == 1)
+            {
+                this.onClose();
+                nextTick(()=>{process.exit();});
+            }
         });
-
+        this.servers.push(server);
         return this;
-    }
-
-    /**
-     * @deprecated deprecated since 1.0.13
-     */
-    private async ParseHeader(request: Request): Promise<boolean>
-    {
-        return new Promise((resolve) =>
-        {
-
-            try {
-                request.path = decodeURI(request.url ?? '/');
-            } catch (error) {
-                request.socket.destroy();
-                resolve(false);
-            }
-            request.postParams = {};
-            request.getParams = {};
-            request.formParams = {};
-            request.files = {};
-            request.ip = request.headers['host'] ?? '';
-
-            //parse get params
-            const size = parseInt(request.headers['content-length'] ?? '0');
-            if (size > (this.options.maxContentSize ?? 1024 * 1024 * 20)) {
-                request.socket.destroy();
-                resolve(false);
-            }
-
-            if (request.method == 'GET') {
-                //handle get parts
-                if (request.url) {
-                    const results = request.url.match(/(.+)\?((?:[^=&]+=[^&]+&?)+)/);
-                    if (results) {
-                        //set get request
-                        request.path = results[1] == '/' ? '/' : results[1];
-                        const params = results[2].split('&');
-                        for (const param of params) {
-                            if (param != '') {
-                                const [key, val] = param.split('=');
-                                request.getParams[key] = val;
-                            }
-                        }
-                    }
-                    resolve(true);
-                }
-            }
-            else {
-                const types = request.headers['content-type'];
-                if (types) {
-                    //handle multipart request
-                    const results = types.match(/multipart\/form-data; boundary=(.+)/);
-                    if (results) {
-                        //parse form data
-                        const boundary = '--' + results[1];
-                        let buffer = Buffer.alloc(0);
-                        request.on('data', (data: Buffer) =>
-                        {
-                            buffer = Buffer.concat([buffer, data]);
-                        });
-                        request.on('end', () =>
-                        {
-                            const items = buffer.toString('binary').split(boundary);
-                            items.pop();
-                            items.shift();
-                            for (const item of items) {
-                                const i = item.indexOf('\r\n\r\n');
-                                const head = item.slice(0, i);
-                                const body = item.slice(i + 4, -2);
-                                const parts = head.split('; ');
-                                const name = parts[1].split('=')[1].slice(1, -1);
-                                let fname = parts[2] ? parts[2].split('=')[1].split('\r\n')[0].slice(1, -1) : parts[2];
-                                if (!fname) {
-                                    request.formParams[name] = body.slice(0, -2);
-
-                                }
-                                else {
-                                    fname = Buffer.from(fname, 'binary').toString();
-                                    //start handle uploading, send an upload id to client
-                                    //this id can be used to query the progress of this upload
-                                    if (this.cm) {
-                                        request.files[fname] = this.cm.CacheFile(Buffer.from(body, 'binary'), fname);
-                                    }
-                                }
-                            }
-                        });
-                    }
-                }
-                if (request.method == 'POST') {
-                    //handle post request
-                    let buffer = Buffer.alloc(0);
-                    request.on('data', (data: Buffer) =>
-                    {
-                        buffer = Buffer.concat([buffer, data]);
-                    });
-                    request.on('end', () =>
-                    {
-                        try {
-                            const params = JSON.parse(buffer.toString());
-                            if (params) {
-                                request.postParams = params;
-                            }
-                            resolve(true);
-                        } catch (error) {
-                            resolve(false);
-                        }
-                    });
-                }
-                else
-                    resolve(true);
-            }
-        });
     }
 
     private HandleRequest(request: Request, response: Response): Promise<boolean>
@@ -302,34 +247,4 @@ export class WebServer
 
         });
     }
-
-    Watch(path: string)
-    {
-        (async () =>
-        {
-            const watcher = fs.watch(path, { recursive: true });
-            const response = Debounce(() =>
-            {
-                process.addListener('exit', () =>
-                {
-                    spawnSync('node', [process.argv[1]], { stdio: 'inherit', shell: true, windowsHide: true });
-                });
-                console.clear();
-                console.log('Changes detected, restarting...');
-                process.emit('SIGINT');
-            }, 200);
-            
-            for await (const event of watcher) {
-                if (event.eventType == 'change')
-                    response();
-            }
-        })();
-        return this;
-    }
-
-    Filter(filter: RequestFilter)
-    {
-        this.filter = filter;
-    }
-
 }
