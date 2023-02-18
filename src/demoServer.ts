@@ -1,5 +1,5 @@
 import { DefineRouter, WebServer } from './WebServer';
-import { ECacheStrategy, StaticRouter } from './Routers/StaticRouter';
+import { ECacheStrategy, StaticRouter, StaticRouterV2 } from './Routers/StaticRouter';
 import { Request, Response, RouterBase } from './Routers/RouterBase';
 import { FileManager } from './Tools/FileManager';
 import { CacheManager } from './Tools/CacheManager';
@@ -8,6 +8,7 @@ import { GetHandler } from './Handlers/GetHandler';
 import { MultipartHandler, PostHandler } from './Handlers/PostHandler';
 import { ServerRecorder } from './Tools/ServerRocorder';
 import fs from 'fs';
+import { Measurement } from './Tools/Utils';
 const fm = new FileManager()
     .Dirs(['./www']);
 const cm = new CacheManager({ persistentDir: './www/cache', tempDir: './www/temp' });
@@ -26,6 +27,8 @@ server.Route(new StaticRouter('/app/calendar/*')
     .Dir('./www')
     .FileManager(fm)
 );
+
+server.Route(new StaticRouterV2('/','./www'));
 
 @DefineRouter('/api/test', server)
 class TestRouter extends RouterBase
@@ -108,7 +111,8 @@ class LoginRouter extends RouterBase
     }
 }
 
-server.StartServer(18886, 'https');
-server.StartServer(18887, 'http');
+// server.StartServer(1886, 'http');
+// server.StartServer(18887, 'http');
 // console.clear();
-console.log('Server started running at: https://localhost:18886');
+console.log('Server started running at: http://localhost:1886');
+console.log(('/app/calendar/asd/dsa.asd').match(/^(\/app\/calendar(\/.*)\/).*$/));

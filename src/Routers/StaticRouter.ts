@@ -1,10 +1,11 @@
 import { Request, Response, RouterBase } from './RouterBase';
 import { Transform } from 'stream';
 import { FileManager } from '../Tools/FileManager';
-import { PathLike, promises as fs } from 'fs';
-import {join as joinPath} from 'path';
+import { PathLike, promises as fs, stat, Stats } from 'fs';
+import { join as joinPath } from 'path';
 import { Writable } from 'stream';
 import { Types } from '../Constants/ContentTypes';
+
 
 export enum ECacheStrategy
 {
@@ -14,35 +15,36 @@ export enum ECacheStrategy
     Auto
 }
 
-export type FilterFunction = (req:Request)=>{ handled:boolean, targetStream:Transform, contentType:string };
+export type StaticFilter = (req: Request, resp:Response) => { targetStream?: Writable, contentType?: string };
 
 export class StaticRouterV2 extends RouterBase
 {
-    private minSize: number |undefined;
+
     private fm: FileManager | undefined;
-    private strategy: ECacheStrategy | undefined;
-    private resolveContentType = true;
+    private strategy: ECacheStrategy = ECacheStrategy.Auto;
     private maxAge = 86400;
-    private filter: FilterFunction | undefined;
+    private cacheMinSize = 1024;
+    private filter:StaticFilter = (req, resp)=>{return {targetStream:resp,contentType:undefined};};
+    private fallback = true;
 
     GetPriority(): number
     {
         return 1;
     }
 
-    constructor(pattern:RegExp | string, private dir:PathLike)
+    constructor(pattern: RegExp | string, private dir: PathLike)
     {
         super(pattern);
     }
 
     /**
-     * Set the minimal size to trigger cache when in strategy auto  
-     * @param sizeInMb 
+     * Set fallback mode for this router, when set to true, any request that matches will try to use the index.html in given root when mathes fails
+     * @param fb 
      * @returns 
      */
-    CachingMinSize(sizeInMb:number)
+    Fallback(fb:boolean)
     {
-        this.minSize = sizeInMb;
+        this.fallback = fb;
         return this;
     }
 
@@ -51,7 +53,7 @@ export class StaticRouterV2 extends RouterBase
      * @param fm 
      * @returns 
      */
-    FileManager(fm:FileManager)
+    FileManager(fm: FileManager)
     {
         this.fm = fm;
         return this;
@@ -68,23 +70,23 @@ export class StaticRouterV2 extends RouterBase
      * @param strategy 
      * @returns 
      */
-    CachingStrategy(strategy:ECacheStrategy)
+    CachingStrategy(strategy: ECacheStrategy)
     {
         this.strategy = strategy;
         return this;
     }
-
+    
     /**
-     * Set whether this router resolve content type automatically
-     * @param resolve 
+     * Set the minium Size to deside cache
+     * @param minSize 
      * @returns 
      */
-    ResovleContentTypes(resolve = true)
+    CacheMinSize(minSize:number)
     {
-        this.resolveContentType = resolve;
+        this.cacheMinSize = minSize;
         return this;
     }
-
+    
     /**
      * Set the max age of cache when using strategy MaxAge
      * @param age 
@@ -96,17 +98,136 @@ export class StaticRouterV2 extends RouterBase
         return this;
     }
 
-    Filter(filterFunction:FilterFunction)
+    Filter(filter: StaticFilter)
     {
-        this.filter = filterFunction;
+        this.filter = filter;
         return this;
     }
 
-    Get(request: Request, response: Response, next: () => void): void {
+    Get(request: Request, response: Response, next: () => void): void
+    {
 
-        const path = request.path;
-        const finalPath = joinPath(this.dir.toString(), path == '/' ? 'index.html' : path);
-        
+        let path = request.path;
+        const {targetStream, contentType} = this.filter(request, response) ;
+        if(targetStream && /^\/(.+\/?)*$/.test(path))
+        {
+            if(path.endsWith('/'))
+            {
+                path += 'index.html';
+            }
+
+            const finalPath = joinPath(this.dir.toString(), path);
+
+            if(!contentType)
+            {
+                const type = Types.Get('.' + finalPath.split('.').pop());
+                if(type)
+                    response.setHeader('Content-Type', type);
+                else
+                    response.setHeader('Content-Type', 'unknown');
+                    
+            }else
+                response.setHeader('Content-Type', contentType);
+
+            fs.stat(finalPath)
+                .then(stats=>{
+                    if(stats.isFile())
+                    { 
+                        this.Route(stats, request, response, finalPath, targetStream);
+                    }
+                
+                })
+                .catch(error=>{
+                    if(this.fallback)
+                    {
+                        const exp =  '^(' + this.pattern.source.slice(1, -1) + '\\/?).*$';
+
+                        const reuslt =   request.path.match(exp);
+                        if(!reuslt)
+                        {
+                            response.End(404,error);
+                            return;
+
+                        }
+                        request.path = reuslt[1];
+                        const finalPath = (request.path.endsWith('/') ? request.path : request.path + '/')  + 'index.html';
+                        fs.stat(finalPath).then(stats=>{
+                            this.Route(stats, request, response, finalPath, targetStream);
+
+                        }).catch(error=>{
+                            response.End(404,error);
+                        });
+                    }
+                    else
+                        response.End(404,error);
+                });
+        }
+    }
+
+    private Route(stats:Stats, request:Request, response:Response, path:string, targetStream:Writable)
+    {
+        if (this.strategy == ECacheStrategy.Auto) {
+            if (stats.size > this.cacheMinSize) {
+                this.strategy = ECacheStrategy.MaxAge;
+            }
+            else {
+                this.strategy = ECacheStrategy.LastModified;
+            }
+        }
+        switch (this.strategy) {
+        case ECacheStrategy.LastModified:
+        {
+            //check if the client has cache
+            const lastCache = request.headers['if-modified-since'];
+            let version;
+
+            if (!lastCache || parseInt(lastCache) != stats.mtime.getTime()) {
+                version = stats.mtime.getTime();
+                response.setHeader('last-modified', version);
+                this.RequestFile(path,targetStream, response, version);
+            }
+            else {
+                response.statusCode = 304;
+                response.end();
+            }
+            break;  
+        }  
+        case ECacheStrategy.MaxAge:
+            response.setHeader('Cache-Control', 'public, max-age=' + this.maxAge);
+            this.RequestFile(path, targetStream, response);
+            break;
+        default:
+        //None
+            this.RequestFile(path, targetStream, response);
+            break;
+        }
+    }
+
+    private RequestFile(path:string,targetStream :Writable , response:Response, version?:number)
+    {
+        if(this.fm)
+        {
+            this.fm.RequestFile(path, targetStream,version)
+                .then(()=>{
+                    response.End();
+                })
+                .catch(error=>{
+                    response.End(404, error);
+                });
+        }
+        else
+        {
+            fs.readFile(path)
+                .then(data=>{
+            
+                    targetStream.write(data);
+                    response.End();
+
+                })
+                .catch(error=>{
+                    response.End(404, error);
+                });
+        }
     }
 }
 
@@ -116,7 +237,7 @@ export class StaticRouter extends RouterBase
     private filter: undefined | ((path: string) => { transform: Transform, ContentEncoding: string } | void);
     private fileMan: undefined | FileManager;
     private cacheStratgy: ECacheStrategy | ((request: Request) => ECacheStrategy) = ECacheStrategy.Auto;
-    private maxAge: number | undefined;
+    private maxAge = 86400;
     private limitedSize: number = 128 * 1024;
     constructor(patterm: RegExp | string, private resolveContentType = true)
     {
@@ -169,15 +290,19 @@ export class StaticRouter extends RouterBase
         const path = request.path;
 
         const finalPath = joinPath(this.dir, path == '/' ? 'index.html' : path);
-        
+
         let stratgy = this.cacheStratgy;
         if (typeof this.cacheStratgy != 'number') {
             stratgy = this.cacheStratgy(request);
         }
 
         fs.stat(finalPath)
-            .then(stats =>
+            .then(async stats =>
             {
+                // if (stats.isDirectory()) {
+                //     finalPath += '/index.html';
+                //     const retry = await fs.stat(finalPath);
+                // }
                 if (stratgy == ECacheStrategy.Auto) {
                     if (stats.size > this.limitedSize) {
                         stratgy = ECacheStrategy.MaxAge;
@@ -209,7 +334,11 @@ export class StaticRouter extends RouterBase
                 {
                     this.maxAge = this.maxAge ? this.maxAge : 86400;
                     response.setHeader('Cache-Control', 'public, max-age=' + this.maxAge);
-                    this.RequestFile(path, finalPath, response, next);
+                    try {
+                        this.RequestFile(path, finalPath, response, next);
+                    } catch (error) {
+                        response.End(404);
+                    }
                     break;
                 }
                 default:

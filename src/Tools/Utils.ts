@@ -1,9 +1,11 @@
 
 type ReturnType<T> = T extends (...args: never[]) => infer R ? R : unknown;
 type ParamsType<T> = T extends (...args: infer P) => unknown ? P : unknown;
-export type Constructor<T> = { new(...args: never[]): T };
+type AnyFunction<ParamTypes extends unknown[], ReturnType = unknown> = (...args: ParamTypes) => unknown;
+type Constructor<T> = { new(...args: never[]): T };
 
-export const classes = new Array<Constructor<unknown>>;
+
+export const classes = new Array<Constructor<unknown>>();
 
 /**
  * Force the given function to run one time via given time
@@ -23,6 +25,24 @@ export function Debounce<T extends unknown[]>(f: (...args: T) => unknown, thresh
         {
             f(...args);
         }, threshold);
+    };
+}
+
+export function Throttle<T extends unknown[]>(f: (...args: T) => unknown, threshold = 1000)
+{
+    let timer: NodeJS.Timeout | undefined;
+    return (...args: ParamsType<typeof f>) =>
+    {
+
+        if (!timer) {
+            f(...args);
+            timer = setTimeout(() =>
+            {
+                clearTimeout(timer);
+                timer = undefined;
+                f(...args);
+            }, threshold);
+        }
     };
 }
 
@@ -147,19 +167,18 @@ export function Deserialize<T extends object>(constructor: Constructor<T>, json:
         return val;
     }) as T;
 }
-
 /**
  * Mesure the run time of the given function
  * @param f the function that will be measured
  * @returns the mesurement function, that returns the reuslt as milliseconds
  */
-export function Measurement<T extends unknown[]>(f: (...args: T) => unknown)
+export function Measurement<Params extends unknown[]>(f: AnyFunction<Params>, counter = () => new Date().getTime())
 {
-    return (...args: ParamsType<typeof f>) =>
+    return async (...args: ParamsType<typeof f>) =>
     {
-        const timeStamp1 = new Date().getTime();
-        f(...args);
-        const timeStamp2 = new Date().getTime();
+        const timeStamp1 = counter();
+        await f(...args);
+        const timeStamp2 = counter();
         return timeStamp2 - timeStamp1;
     };
 }

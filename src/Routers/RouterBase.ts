@@ -12,7 +12,9 @@ export interface RequestParams
 }
 
 export type Response = http.ServerResponse &
+// {ended:boolean} &
 { Write: (chunk: object | string | Buffer, encoding?: BufferEncoding) => boolean } &
+{ Redirect: (url: string) => void } &
 { End: (message?: string | object | Buffer) => void } &
 { End: (code?: number) => void } &
 { End: (code?: number, message?: string | object | Buffer) => void }
@@ -27,6 +29,15 @@ export function Response(res: http.ServerResponse)
             return response.write(JSON.stringify(chunk), encoding);
         else
             return response.write(chunk, encoding);
+    };
+
+    response.Redirect = (url) =>
+    {
+        response.writeHead(302, {
+            'Location': url
+            //add other headers here...
+        });
+        response.end();
     };
 
     response.End = (...args) =>
@@ -57,7 +68,7 @@ export function Response(res: http.ServerResponse)
 export abstract class RouterBase
 {
     public pattern: RegExp;
-    
+
     constructor(pattern: RegExp | string)
     {
         if (typeof pattern == 'string') {
@@ -78,8 +89,10 @@ export abstract class RouterBase
             // \/cache\/*
             reg = '^' + reg.replace(/\\\/\*/g, '(\\/.*)$');
 
-
+            
             this.pattern = RegExp(reg);
+            // console.log('^(' + this.pattern.source.slice(1, -1) + '\\/).*$');
+
         }
         else {
             this.pattern = pattern;

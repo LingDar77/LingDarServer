@@ -211,7 +211,7 @@ export class WebServer
             }
 
             response.setHeader('X-Frame-Options', 'SAMEORIGIN');
-            response.setHeader('Content-Security-Policy', 'img-src *; script-src \'self\'; style-src \'self\' \'unsafe-inline\'; frame-ancestors \'self\'');
+            response.setHeader('Content-Security-Policy', 'img-src *; script-src \'self\' ; style-src \'self\' \'unsafe-inline\'; frame-ancestors \'self\'');
 
             response = Response(response);
 
@@ -244,7 +244,6 @@ export class WebServer
                     }
                 }
                 resolve(true);
-
             })();
 
         });

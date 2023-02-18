@@ -3,8 +3,11 @@ import { Request, Response, RouterBase } from '../Routers/RouterBase';
 
 //Actually you may not want to use this router, instead, you may need to write your own policy to handlle cors
 @DefineRouter(/^(\/.*)$/)
-class CorsRouter extends RouterBase
+export class CorsRouter extends RouterBase
 {
+    GetPriority(): number {
+        return -1;
+    }
     Get(request: Request, response: Response, next: () => void): void
     {
         response.setHeader('Referrer-Policy', 'no-referrer');
@@ -14,7 +17,6 @@ class CorsRouter extends RouterBase
     Post(request: Request, response: Response, next: () => void): void
     {
         response.setHeader('Referrer-Policy', 'no-referrer');
-
         response.setHeader('Access-Control-Allow-Origin', '*' );
         next();
     }
