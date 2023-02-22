@@ -6,8 +6,9 @@ export interface RequestParams
     GetParams: { [x: string]: string };
     PostParams: { [x: string]: string };
     FormParams: { [x: string]: string };
-    Files: { [x: string]: Promise<string> };
+    Files: { [x: string]: Buffer };
     RequestPath: string;
+    ResolvedPath: string;
     Address: string;
 }
 
@@ -25,10 +26,13 @@ export function Response(res: http.ServerResponse)
 
     response.Write = (chunk: object | string | Buffer, encoding: BufferEncoding = 'utf-8') =>
     {
-        if (typeof chunk == 'object')
-            return response.write(JSON.stringify(chunk), encoding);
-        else
+        if (chunk instanceof Buffer || typeof chunk == 'string') {
             return response.write(chunk, encoding);
+        }
+        else {
+            response.setHeader('Content-Type', 'application/json');
+            return response.write(JSON.stringify(chunk), encoding);
+        }
     };
 
     response.Redirect = (url) =>
@@ -67,9 +71,8 @@ export function Response(res: http.ServerResponse)
 
 export abstract class RouterBase
 {
-    public pattern: RegExp;
-
-    constructor(pattern: RegExp | string)
+    public expression = /.*/g;
+    constructor(pattern: RegExp | string,)
     {
         if (typeof pattern == 'string') {
             /**
@@ -89,15 +92,14 @@ export abstract class RouterBase
             // \/cache\/*
             reg = '^' + reg.replace(/\\\/\*/g, '(\\/.*)$');
 
-            
-            this.pattern = RegExp(reg);
+
+            this.expression = RegExp(reg);
             // console.log('^(' + this.pattern.source.slice(1, -1) + '\\/).*$');
 
         }
         else {
-            this.pattern = pattern;
+            this.expression = pattern;
         }
-
     }
 
     GetPriority()
@@ -105,14 +107,5 @@ export abstract class RouterBase
         return 0;
     }
 
-    Get(request: Request, response: Response, next: () => void)
-    {
-        next();
-    }
-
-    Post(request: Request, response: Response, next: () => void)
-    {
-        next();
-    }
-
+    abstract Handle(request: Request, response: Response): Promise<void>;
 }

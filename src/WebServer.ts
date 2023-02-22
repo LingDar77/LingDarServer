@@ -5,7 +5,7 @@ import { Debounce } from './Tools/Utils';
 import { spawnSync } from 'child_process';
 import { CacheManager } from './Tools/CacheManager';
 import { RouterBase, Request, Response } from './Routers/RouterBase';
-import { ServerHandler } from './Handlers/ServerHandler';
+import { HandlerBase } from './Handlers/HandlerBase';
 import { ServerRecorder } from './Tools/ServerRocorder';
 import ip from 'request-ip';
 import { RequestFilter } from './Tools/RequestFilter';
@@ -36,7 +36,7 @@ export class WebServer
 {   
     public routers = new Array<RouterBase>();
     public servers = new Array<Server>();
-    public handlers: ServerHandler[] = [];
+    public handlers: HandlerBase[] = [];
     private options: ServerOptions = {};
     private onClose = () => { };
     private recorder: ServerRecorder | undefined;
@@ -58,7 +58,7 @@ export class WebServer
         return this;
     }
 
-    Handle(handler: ServerHandler)
+    Handle(handler: HandlerBase)
     {
         this.handlers.push(handler);
         return this;
@@ -189,14 +189,14 @@ export class WebServer
         {
 
             try {
-                request.path = decodeURI(request.url ?? '/');
+                request.RequestPath = decodeURI(request.url ?? '/');
             } catch (error) {
                 request.socket.destroy();
                 resolve(false);
                 return;
             }
 
-            request.ip = ip.getClientIp(request) ?? 'unknown';
+            request.Address = ip.getClientIp(request) ?? 'unknown';
 
             if (this.filter && !this.filter.Match(request)) {
                 resolve(false);
@@ -220,10 +220,10 @@ export class WebServer
                 let going = false;
                 for (const router of server.routers) {
                     const next = () => going = true;
-                    const results = request.path.match(router.pattern);
+                    const results = request.RequestPath.match(router.pattern);
                     if (results) {
                         if (results[1])
-                            request.path = results[1];
+                            request.RequestPath = results[1];
                         going = false;
                         f(request, response, router, next);
                         if (!going) {

@@ -1,11 +1,11 @@
 
 import { Request, Response } from '../Routers/RouterBase';
 import { WebServer } from '../WebServer';
-import { ServerHandler } from './ServerHandler';
+import { HandlerBase } from './HandlerBase';
 import { RouterBase } from '../Routers/RouterBase';
 
 
-export class GetHandler extends ServerHandler
+export class GetHandler extends HandlerBase
 {
     Match(request: Request, server: WebServer): boolean
     {
@@ -21,14 +21,14 @@ export class GetHandler extends ServerHandler
                 const results = request.url.match(/(.+)\?((?:[^=&]+=[^&]+&?)+)/);
                 if (results) {
                     //set get request
-                    request.path = results[1] == '/' ? '/' : results[1];
+                    request.RequestPath = results[1] == '/' ? '/' : results[1];
                     const params = results[2].split('&');
                     if (params.length != 0) {
-                        request.getParams = {};
+                        request.GetParams = {};
                         for (const param of params) {
                             if (param != '') {
                                 const [key, val] = param.split('=');
-                                request.getParams[key] = val;
+                                request.GetParams[key] = val;
                             }
                         }
                     }

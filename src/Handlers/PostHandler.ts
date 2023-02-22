@@ -1,8 +1,8 @@
 import { Request, Response } from '../Routers/RouterBase';
 import { WebServer } from '../WebServer';
-import { ServerHandler } from './ServerHandler';
+import { HandlerBase } from './HandlerBase';
 import { RouterBase } from '../Routers/RouterBase';
-export class PostHandler extends ServerHandler
+export class PostHandler extends HandlerBase
 {
     Match(request: Request): boolean
     {
@@ -32,7 +32,7 @@ export class PostHandler extends ServerHandler
                     if (data != '') {
                         const params = JSON.parse(data);
                         if (params) {
-                            request.postParams = params;
+                            request.PostParams = params;
                         }
                     }
                 } catch (error) {
@@ -46,7 +46,7 @@ export class PostHandler extends ServerHandler
     }
 }
 
-export class MultipartHandler extends ServerHandler
+export class MultipartHandler extends HandlerBase
 {
     private boundary = '';
     Match(request: Request): boolean
@@ -88,17 +88,17 @@ export class MultipartHandler extends ServerHandler
                     const name = parts[1].split('=')[1].slice(1, -1);
                     let fname = parts[2] ? parts[2].split('=')[1].split('\r\n')[0].slice(1, -1) : parts[2];
                     if (!fname) {
-                        if (!request.formParams)
-                            request.formParams = {};
-                        request.formParams[name] = body.slice(0, -2);
+                        if (!request.FormParams)
+                            request.FormParams = {};
+                        request.FormParams[name] = body.slice(0, -2);
 
                     }
                     else {
                         fname = Buffer.from(fname, 'binary').toString();
                         if (server.cm) {
-                            if (!request.files)
-                                request.files = {};
-                            request.files[fname] = server.cm.CacheFile(Buffer.from(body, 'binary'), fname);
+                            if (!request.Files)
+                                request.Files = {};
+                            request.Files[fname] = server.cm.CacheFile(Buffer.from(body, 'binary'), fname);
                         }
                     }
                 }

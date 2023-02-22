@@ -45,12 +45,12 @@ export class ServerRecorder
             let length = 0;
             (async () =>
             {
-                for (const file in req.files) {
+                for (const file in req.Files) {
 
-                    files[file as keyof typeof files] = await req.files[file] as never;
+                    files[file as keyof typeof files] = await req.Files[file] as never;
                     ++length;
                 }
-                resolve(`Time: ${new Date().toLocaleTimeString()}, IP: ${req.ip}, Request Method: ${req.method}, RequestPath: ${req.path}${req.getParams ? ', GetParams: ' + JSON.stringify(req.getParams) : ''}${req.postParams ? ', PostParams: ' + JSON.stringify(req.postParams) : ''}${req.formParams ? ', FormParams: ' + JSON.stringify(req.formParams) : ''}${length ? ', Files: ' + JSON.stringify(files) : ''}\n`);
+                resolve(`Time: ${new Date().toLocaleTimeString()}, IP: ${req.Address}, Request Method: ${req.method}, RequestPath: ${req.RequestPath}${req.GetParams ? ', GetParams: ' + JSON.stringify(req.GetParams) : ''}${req.PostParams ? ', PostParams: ' + JSON.stringify(req.PostParams) : ''}${req.FormParams ? ', FormParams: ' + JSON.stringify(req.FormParams) : ''}${length ? ', Files: ' + JSON.stringify(files) : ''}\n`);
             })();
         });
     }

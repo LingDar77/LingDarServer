@@ -2,7 +2,7 @@ import { RouterBase } from '../Routers/RouterBase';
 import { WebServer } from '../WebServer';
 import {Request, Response} from '../Routers/RouterBase';
 
-export abstract class ServerHandler
+export abstract class HandlerBase
 {
     Handle:((request:Request, response:Response, router:RouterBase, next:()=>void)=>void) | undefined;
     

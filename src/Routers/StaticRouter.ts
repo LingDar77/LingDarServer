@@ -4,7 +4,7 @@ import { FileManager } from '../Tools/FileManager';
 import { PathLike, promises as fs, stat, Stats } from 'fs';
 import { join as joinPath } from 'path';
 import { Writable } from 'stream';
-import { Types } from '../Constants/ContentTypes';
+import { Types } from '../v2/ContentTypes';
 
 
 export enum ECacheStrategy
@@ -107,7 +107,7 @@ export class StaticRouterV2 extends RouterBase
     Get(request: Request, response: Response, next: () => void): void
     {
 
-        let path = request.path;
+        let path = request.RequestPath;
         const {targetStream, contentType} = this.filter(request, response) ;
         if(targetStream && /^\/(.+\/?)*$/.test(path))
         {
@@ -142,15 +142,15 @@ export class StaticRouterV2 extends RouterBase
                     {
                         const exp =  '^(' + this.pattern.source.slice(1, -1) + '\\/?).*$';
 
-                        const reuslt =   request.path.match(exp);
+                        const reuslt =   request.RequestPath.match(exp);
                         if(!reuslt)
                         {
                             response.End(404,error);
                             return;
 
                         }
-                        request.path = reuslt[1];
-                        const finalPath = (request.path.endsWith('/') ? request.path : request.path + '/')  + 'index.html';
+                        request.RequestPath = reuslt[1];
+                        const finalPath = (request.RequestPath.endsWith('/') ? request.RequestPath : request.RequestPath + '/')  + 'index.html';
                         fs.stat(finalPath).then(stats=>{
                             this.Route(stats, request, response, finalPath, targetStream);
 
@@ -287,7 +287,7 @@ export class StaticRouter extends RouterBase
 
     Get(request: Request, response: Response, next: () => void): void
     {
-        const path = request.path;
+        const path = request.RequestPath;
 
         const finalPath = joinPath(this.dir, path == '/' ? 'index.html' : path);
 
