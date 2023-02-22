@@ -2,7 +2,6 @@
 import { Request, Response, RouterBase } from "./v2/Core";
 import { DefineRouter, WebServer } from "./v2/WebServer";
 import { CorsRouter, GetRouter, MultipartRouter, PostRouter, StaticRouter } from "./v2/Routers";
-import { Measurement } from "./Tools/Utils";
 import { WatchChange } from "./v2/Tools";
 
 @DefineRouter('/test/*')

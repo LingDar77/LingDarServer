@@ -29,10 +29,9 @@ export function FormatDate(date: Date, format = 'yyyy-mm-dd')
  */
 export function Debounce<T extends unknown[]>(f: (...args: T) => unknown, threshold = 1000)
 {
-    let timer: NodeJS.Timeout;
+    let timer: ReturnType<typeof setTimeout>;
     return (...args: ParamsType<typeof f>) =>
     {
-
         if (timer)
             clearTimeout(timer);
         timer = setTimeout(() =>
@@ -44,7 +43,7 @@ export function Debounce<T extends unknown[]>(f: (...args: T) => unknown, thresh
 
 export function Throttle<T extends unknown[]>(f: (...args: T) => unknown, threshold = 1000)
 {
-    let timer: NodeJS.Timeout | undefined;
+    let timer: ReturnType<typeof setTimeout>;
     return (...args: ParamsType<typeof f>) =>
     {
 
@@ -53,7 +52,6 @@ export function Throttle<T extends unknown[]>(f: (...args: T) => unknown, thresh
             timer = setTimeout(() =>
             {
                 clearTimeout(timer);
-                timer = undefined;
                 f(...args);
             }, threshold);
         }
@@ -103,6 +101,132 @@ export function WatchChange(path: string, onChange: () => void)
         }
     })();
 }
+
+/**
+ * Mesure the run time of the given function
+ * @param f the function that will be measured
+ * @returns the mesurement function, that returns the reuslt as milliseconds
+ */
+export function Measurement<Params extends unknown[]>(f: AnyFunction<Params>, counter = () => new Date().getTime())
+{
+    return async (...args: ParamsType<typeof f>) =>
+    {
+        const timeStamp1 = counter();
+        await f(...args);
+        const timeStamp2 = counter();
+        return timeStamp2 - timeStamp1;
+    };
+}
+
+export const classes = new Array<Constructor<unknown>>();
+
+/**
+ * Declare that class may need to be deserialized
+ */
+export function DeclareClass()
+{
+    return declareClass;
+}
+
+/**
+ * Declare that class may need to be deserialized
+ */
+export const declareClass = <T>(constructor: Constructor<T>) =>
+{
+    classes.push(constructor);
+};
+
+/**
+ * Serialize the given object into json string
+ * @param obj the object to be serialized
+ * @returns the result json string
+ */
+export function Serialize<T extends object>(obj: T): string
+{
+    // const constructor = obj.constructor as {new():T};
+    /**
+     * {
+     * DataType:"Asd",
+     * values:{
+     *  "asd":213,
+     *  "OOO":{
+     *  DataType:"das",
+     *  values:{
+     *  "dsa":213
+     * }
+     * }
+     * }
+     * }
+     */
+
+    return JSON.stringify(obj, (key, val) =>
+    {
+
+        if (key == '' && val instanceof Object) {
+            if (val instanceof Map) {
+                return {
+                    classType: 'Map',
+                    values: Array.from(val.entries())
+                };
+            }
+            const vals = {};
+            for (const key in val) {
+                if (typeof val[key] != 'object')
+                    vals[key as keyof typeof vals] = val[key] as never;
+                else {
+                    vals[key as keyof typeof vals] = JSON.parse(Serialize(val[key])) as never;
+                }
+            }
+            return { classType: obj.constructor.name, values: vals };
+        }
+        else {
+            return val;
+        }
+    });
+
+}
+
+/**
+ * Deserialize the given json to sertain object, all relative classes need to be declared before(self included)
+ * @param constructor the constructor of target object
+ * @param json the json string of object
+ * @returns the reuslt object
+ */
+export function Deserialize<T extends object>(constructor: Constructor<T>, json: string)
+{
+    new constructor();
+    return JSON.parse(json, (key, val) =>
+    {
+
+        if (val.classType == 'Map') {
+            return new Map(val.values);
+        }
+        if (val.classType == 'Array') {
+            const arr = new Array<unknown>();
+            for (const key in val.values) {
+                arr.push(val.values[key]);
+            }
+            return arr;
+        }
+        if (typeof val == 'object' && val != null) {
+            if (val instanceof Array || val instanceof Map) {
+                return val;
+            }
+            const constructor = classes.find(item => item.name == val.classType);
+            if (constructor) {
+                const obj = new constructor() as object;
+                for (const key in val.values) {
+                    obj[key as keyof typeof obj] = val.values[key] as never;
+                }
+                return obj;
+            }
+            return val;
+        }
+        return val;
+    }) as T;
+}
+
+
 
 export class LRUCache<Key, Value>
 {

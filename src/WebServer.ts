@@ -1,251 +1,159 @@
-import { Server, createServer as http } from 'http';
-import { ServerOptions as options, createServer as https } from 'https';
-import { promises as fs } from 'fs';
-import { Debounce } from './Tools/Utils';
-import { spawnSync } from 'child_process';
-import { CacheManager } from './Tools/CacheManager';
-import { RouterBase, Request, Response } from './Routers/RouterBase';
-import { HandlerBase } from './Handlers/HandlerBase';
-import { ServerRecorder } from './Tools/ServerRocorder';
+
+import { Server as HttpServer, createServer as createHttpServer } from 'http';
+import { Server as HttpsServer, ServerOptions as httpsServerOptions, createServer as createHttpsServer } from 'https';
+import { MergeSortedArray } from './Tools';
+import { RouterBase, Request, Response } from './Core';
 import ip from 'request-ip';
-import { RequestFilter } from './Tools/RequestFilter';
-import { nextTick } from 'process';
 
-        
-export type ServerOptions = { maxContentSize?: number } & options;
-export const globalRouters = new Array<[RouterBase, (webServer: WebServer) => boolean]>();
 
-export function DefineRouter(pathPattern: RegExp | string, targetServer: ((webServer: WebServer) => boolean) | WebServer = (webServer: WebServer) => true)
+
+const GlobalRouter = new Array<(server: WebServer) => (RouterBase | null)>();
+
+export type ServerOptions =
+    {
+        maxContentSize: number
+    }
+    & httpsServerOptions
+
+export type OriginalServer = HttpServer | HttpsServer;
+
+export function DefineRouter(pattern: RegExp | string, targetServer: WebServer | ((webServer: WebServer) => boolean) = () => true)
 {
     return <T extends { new(p: RegExp | string): RouterBase }>(constructor: T) =>
     {
         if (targetServer instanceof WebServer) {
             if (targetServer) {
-                targetServer.routers.push(new constructor(pathPattern));
+                //target server is already created
+                targetServer.Routers.push(new constructor(pattern));
             }
             else {
-                globalRouters.push([new constructor(pathPattern), (webServer) => webServer == targetServer]);
+                //target server is not instanced yet, add this router to global list
+                GlobalRouter.push(server => server == targetServer ? new constructor(pattern) : null);
             }
         }
         else {
-            globalRouters.push([new constructor(pathPattern), targetServer]);
+            GlobalRouter.push(server => targetServer(server) ? new constructor(pattern) : null);
         }
     };
 }
+
+
 export class WebServer
-{   
-    public routers = new Array<RouterBase>();
-    public servers = new Array<Server>();
-    public handlers: HandlerBase[] = [];
-    private options: ServerOptions = {};
-    private onClose = () => { };
-    private recorder: ServerRecorder | undefined;
-    private filter: RequestFilter | undefined;
+{
 
-    constructor( public readonly cm?: CacheManager) {
-        process.setMaxListeners(16);
-    }
-    
-    Record(recorder: ServerRecorder)
-    {
-        this.recorder = recorder;
-        return this;
-    }
+    Routers = new Array<RouterBase>();
+    Instance: OriginalServer | undefined;
+    Options: ServerOptions;
+    Run = () => { };
 
-    Route(router: RouterBase)
-    {
-        this.routers.push(router);
-        return this;
-    }
-
-    Handle(handler: HandlerBase)
-    {
-        this.handlers.push(handler);
-        return this;
-    }
-
-    Options(options: ServerOptions)
-    {
-        this.options = options;
-        return this;
-    }
-
-    OnClose(onClose: () => void)
-    {
-        this.onClose = onClose;
-        return this;
-    }
-
-    Watch(path: string)
-    {
-        (async () =>
-        {
-            const watcher = fs.watch(path, { recursive: true });
-            const response = Debounce(() =>
-            {
-                process.addListener('exit', () =>
-                {
-                    spawnSync('node', [process.argv[1]], { stdio: 'inherit', shell: true, windowsHide: true });
-                });
-                // console.clear();
-                console.log('Changes detected, restarting...');
-                process.emit('SIGINT');
-            }, 200);
-            
-            for await (const event of watcher) {
-                if (event.eventType == 'change')
-                    response();
-            }
-        })();
-        return this;
-    }
-
-    Filter(filter: RequestFilter)
-    {
-        this.filter = filter;
-    }
-    
-    StartServer(port:number):WebServer;
-    StartServer(protocol:'https'|'http'):WebServer;
-    StartServer(protocol:'https'|'http', port:number):WebServer;
-    StartServer(port:number, protocol:'https'|'http'):WebServer;
-    StartServer(...args:unknown[]):WebServer
+    constructor(instance: OriginalServer);
+    constructor(port?: number, protocol?: 'https' | 'http', options?: ServerOptions);
+    constructor(protocol?: 'https' | 'http', port?: number, options?: ServerOptions);
+    constructor(...args: unknown[])
     {
         let port = 8080;
         let protocol = 'http';
-        if(typeof args[0] == 'number')
-        {
-            port = args[0];
-        }
-        else
-        {
-            protocol =  (args[0] as string) ?? 'http';
-        }
-        if(typeof args[1] == 'number')
-        {
-            port = args[1];
-        }
-        else
-        {
-            protocol = (args[1] as string) ?? 'http';
-        }
 
-        const instance = protocol == 'https' ? https : http;
+        this.Options = { maxContentSize: 1024 ** 2 };
 
-        for (const router of globalRouters) {
-            if (router[1](this)) {
-                this.routers.push(router[0]);
+        if (args[0]) {
+            if (typeof args[0] == 'string') {
+                protocol = args[0];
+            }
+            else if (typeof args[0] == 'number') {
+                port = args[0];
+            }
+            else {
+                this.Instance = args[0] as OriginalServer;
             }
         }
-
-        this.routers.sort((a, b) =>
-        {
-            return a.GetPriority() - b.GetPriority();
-        });
-
-        const server = (instance as typeof http)(this.options, async (request, response) =>
-        {
-            const req = request as Request;
-            const res = response as Response;
-            if (!await this.HandleRequest(req, res)) {
-                res.statusCode = 404;
-                res.end();
+        if (args[1]) {
+            if (typeof args[1] == 'string') {
+                protocol = args[1];
             }
-            else
-                this.recorder?.Record(req);
-        });
-
-        server.headersTimeout = 3200;
-
-        server.listen(port);
-        server.on('close', () =>
-        {
-            this.cm?.Destory();
-            this.recorder?.Destory();
-            this.onClose();
-        });
-
-        process.on('SIGINT', () =>
-        {
-            if(this.servers.length)
-            {
-                const server = this.servers.pop();
-                server?.close();
+            else {
+                port = args[1] as number;
             }
-            if(this.servers.length == 1)
-            {
-                this.onClose();
-                nextTick(()=>{process.exit();});
+        }
+        if (args[2]) {
+            this.Options = args[2] as ServerOptions;
+        }
+
+        const handleOrginalRequest = async (req: Request, res: Response) =>
+        {
+            //prepare vals
+            try {
+                req.RequestPath = decodeURI(req.url ?? '/');
+            } catch (error) {
+                req.socket.destroy();
+                return;
             }
-        });
-        this.servers.push(server);
+
+            req.Address = ip.getClientIp(req) ?? 'unknown';
+
+            const size = parseInt(req.headers['content-length'] ?? '0');
+            if (size > this.Options.maxContentSize) {
+                req.socket.destroy();
+                return;
+            }
+
+            res = Response(res);
+
+            //iterate routers
+            for (const router of this.Routers) {
+
+                const results = req.RequestPath.match(router.expression);
+                // console.log(results);
+                
+                if (results) {
+                    if (results[1])
+                        req.ResolvedPath = results[1];
+                    try {
+                        await router.Handle(req, res);
+                    } catch (error) {
+                        res.End(404);
+                        break;
+                    }
+                }
+
+            }
+            
+            //No router handled this request, reject connection
+            if (!res.writableEnded)
+                res.End(404);
+
+
+        }
+
+        if (!this.Instance) {
+            const createServer = (protocol == 'http' ? createHttpServer : createHttpsServer) as typeof createHttpsServer;
+            this.Instance = createServer(this.Options);
+        }
+        this.Instance.on('request', handleOrginalRequest);
+
+
+        this.Run = () =>
+        {
+            //collect routers
+            for (const filter of GlobalRouter) {
+                const router = filter(this);
+                if (router) {
+                    this.Routers.push(router);
+                }
+            }
+            this.Routers.sort((lhs, rhs) => lhs.GetPriority() - rhs.GetPriority());
+            this.Instance?.listen(port);
+        }
+    }
+
+    Route(...router: Array<RouterBase>)
+    {
+        if (router.length > 1) {
+            router.sort((lhs, rhs) => lhs.GetPriority() - rhs.GetPriority());
+        }
+        this.Routers = MergeSortedArray(this.Routers, router, (lhs, rhs) => lhs.GetPriority() > rhs.GetPriority());
         return this;
     }
 
-    private HandleRequest(request: Request, response: Response): Promise<boolean>
-    {
-
-        return new Promise((resolve) =>
-        {
-
-            try {
-                request.RequestPath = decodeURI(request.url ?? '/');
-            } catch (error) {
-                request.socket.destroy();
-                resolve(false);
-                return;
-            }
-
-            request.Address = ip.getClientIp(request) ?? 'unknown';
-
-            if (this.filter && !this.filter.Match(request)) {
-                resolve(false);
-                return;
-            }
-
-            const size = parseInt(request.headers['content-length'] ?? '0');
-            if (size > (this.options.maxContentSize ?? 1024 * 1024)) {
-                request.socket.destroy();
-                resolve(false);
-                return;
-            }
-
-            response.setHeader('X-Frame-Options', 'SAMEORIGIN');
-            response.setHeader('Content-Security-Policy', 'img-src *; script-src \'self\' ; style-src \'self\' \'unsafe-inline\'; frame-ancestors \'self\'');
-
-            response = Response(response);
-
-            function handle(f: (req: Request, res: Response, router: RouterBase, next: () => void) => void, server: WebServer)
-            {
-                let going = false;
-                for (const router of server.routers) {
-                    const next = () => going = true;
-                    const results = request.RequestPath.match(router.pattern);
-                    if (results) {
-                        if (results[1])
-                            request.RequestPath = results[1];
-                        going = false;
-                        f(request, response, router, next);
-                        if (!going) {
-                            break;
-                        }
-                    }
-                }
-            }
-
-            (async () =>
-            {
-                for (const handler of this.handlers) {
-                    if (handler.Match(request, this)) {
-                        await handler.Preprocess(request, response, this);
-                        if (handler.Handle) {
-                            handle(handler.Handle.bind(handler), this);
-                        }
-                    }
-                }
-                resolve(true);
-            })();
-
-        });
-    }
 }
+

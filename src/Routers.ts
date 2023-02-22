@@ -305,6 +305,7 @@ export class StaticRouter extends RouterBase
                 } catch (error) { }
             }
             resolve();
+            
         });
     }
 
