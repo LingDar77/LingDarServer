@@ -3,6 +3,10 @@ import { LRUCache } from "./Tools";
 import { Types } from './ContentTypes';
 import { Stats } from "fs";
 
+/**
+ * Security router is need to set policies configured to ensure security
+ * this version is not always suitable for your server, you should configure one for your need.
+ */
 export class SecurityRouter extends RouterBase
 {
     GetPriority(): number
@@ -21,6 +25,10 @@ export class SecurityRouter extends RouterBase
     }
 }
 
+/**
+ * Cors router configures cors problems for your server
+ * this version is not always suitable for your server, you should configure one for your need.
+ */
 export class CorsRouter extends RouterBase
 {
     GetPriority(): number
@@ -38,12 +46,16 @@ export class CorsRouter extends RouterBase
     }
 }
 
+/**
+ * Get router handles get requests and format incoming get params for your server
+ */
 export class GetRouter extends RouterBase
 {
     GetPriority(): number
     {
         return -1;
     }
+
     Handle(request: Request, response: Response): Promise<void>
     {
         return new Promise(resolve =>
@@ -75,12 +87,17 @@ export class GetRouter extends RouterBase
     }
 }
 
+/**
+ * Post router handles post requests and format incoming post params for your server, 
+ * including tranditional form params and normal post params.
+ */
 export class PostRouter extends RouterBase
 {
     GetPriority(): number
     {
         return -1;
     }
+
     Handle(request: Request, response: Response): Promise<void>
     {
         return new Promise((resolve, reject) =>
@@ -120,6 +137,9 @@ export class PostRouter extends RouterBase
     }
 }
 
+/**
+ * Multipart router handles multipart request and format incoming multipart form params and file buffer.
+ */
 export class MultipartRouter extends RouterBase
 {
     GetPriority(): number
@@ -193,6 +213,15 @@ export enum ECacheStrategy
     Auto
 }
 
+/**
+ * Static router handles basic file request and automatically send data for request
+ * you can configure router actions:
+ * @Strategy decides how the router configure caching method,
+ * @MaxAge decides the client's cache lifetime by Strategy MaxAge
+ * @LimitedSize decides when will use MaxAge or LastModify when choise Auto Strategy
+ * @MaxCacheNum decides how many caches will be reserved
+ * @Dir the actual dir the router will use
+ */
 export class StaticRouter extends RouterBase
 {
     private Strategy: ECacheStrategy = ECacheStrategy.Auto;
@@ -252,6 +281,7 @@ export class StaticRouter extends RouterBase
             const JoinPath = (await import('path')).join;
             const ResolvedDir = ResolvePath(this.Dir);
             const finnalPath = JoinPath(ResolvedDir, request.ResolvedPath);
+
             if (finnalPath.includes(ResolvedDir)) {
                 //Requeting path is safe
                 try {
@@ -305,7 +335,7 @@ export class StaticRouter extends RouterBase
                 } catch (error) { }
             }
             resolve();
-            
+
         });
     }
 

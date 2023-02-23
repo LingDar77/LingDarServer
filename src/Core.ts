@@ -69,12 +69,18 @@ export function Response(res: http.ServerResponse)
     return response;
 }
 
+/**
+ * A router is a handler to do process and response when reciving http(s) request from Internet.
+ * every router has a priority which depends the prioity of excuting.
+ * everytime response.End() is called, the further router will not be excuted anymore.
+ */
 export abstract class RouterBase
 {
-    public expression = /.*/g;
+    public expression;
     constructor(pattern: RegExp | string,)
     {
         if (typeof pattern == 'string') {
+
             /**
              *  /*
              *  ^(\/.*)$
@@ -92,10 +98,8 @@ export abstract class RouterBase
             // \/cache\/*
             reg = '^' + reg.replace(/\\\/\*/g, '(\\/.*)$');
 
-
             this.expression = RegExp(reg);
             // console.log('^(' + this.pattern.source.slice(1, -1) + '\\/).*$');
-
         }
         else {
             this.expression = pattern;
@@ -107,5 +111,12 @@ export abstract class RouterBase
         return 0;
     }
 
+    /**
+     * Actually handle one request, normally resolve means handle complete, 
+     * reject means some errors happened and no need to do further processes, and this request will automatically send 404 code
+     * calls response.End() means this request has been handled completely and further routers can not send any infos
+     * @param request 
+     * @param response 
+     */
     abstract Handle(request: Request, response: Response): Promise<void>;
 }

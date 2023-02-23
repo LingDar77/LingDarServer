@@ -228,6 +228,7 @@ export function Deserialize<T extends object>(constructor: Constructor<T>, json:
 
 
 
+@DeclareClass()
 export class LRUCache<Key, Value>
 {
     private cache = new Map<Key, Value>();

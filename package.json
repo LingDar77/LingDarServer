@@ -1,8 +1,8 @@
 {
   "name": "lingdar-server",
-  "version": "1.0.19",
+  "version": "1.0.22",
   "description": "",
-  "main": "WebServer.js",
+  "main": "./WebServer.js",
   "repository": "https://github.com/LingDar77/LingDarServer.git",
   "scripts": {
     "test": "npm run build && node ./demoServer.js",

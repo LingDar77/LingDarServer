@@ -1,8 +1,8 @@
 
-import { Request, Response, RouterBase } from "./v2/Core";
-import { DefineRouter, WebServer } from "./v2/WebServer";
-import { CorsRouter, GetRouter, MultipartRouter, PostRouter, StaticRouter } from "./v2/Routers";
-import { WatchChange } from "./v2/Tools";
+import { Request, Response, RouterBase } from "./Core";
+import { DefineRouter, WebServer } from "./WebServer";
+import { CorsRouter, GetRouter, MultipartRouter, PostRouter, StaticRouter } from "./Routers";
+import { WatchChange } from "./Tools";
 
 @DefineRouter('/test/*')
 class TestRouter extends RouterBase
@@ -12,6 +12,8 @@ class TestRouter extends RouterBase
         return new Promise((resolve, reject) =>
         {
             response.setHeader('Content-Type', 'text/html; charset=utf-8');
+            console.log('??');
+            
             // response.End("???");
             resolve();
         });
@@ -37,7 +39,7 @@ class TestRouter2 extends RouterBase
     }
 }
 
-const server = new WebServer(18888);
+const server = new WebServer();
 server.Route(new CorsRouter('/*'),
     new GetRouter('/test/*'),
     new PostRouter('/*'),
@@ -45,17 +47,12 @@ server.Route(new CorsRouter('/*'),
     new StaticRouter('/res/*', './www')
 );
 
-server.Run();
-// console.log(server.Routers);
-// const a = 'C://asd/dsa.txt';
-// const b = '^C://asd/';
-// console.log(a.match(b));
-
+server.Run('http', 1887);
 WatchChange(__filename, async () =>
 {
     const spawnSync = (await import('child_process')).spawnSync;
-    server.Instance?.close();
     console.log('Changes detected, restarting...');
+    server.Close();
     spawnSync('node', [process.argv[1]], { stdio: 'inherit', shell: true, windowsHide: true });
     process.emit('SIGINT');
 });

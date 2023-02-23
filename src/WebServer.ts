@@ -42,109 +42,9 @@ export class WebServer
 {
 
     Routers = new Array<RouterBase>();
-    Instance: OriginalServer | undefined;
-    Options: ServerOptions;
-    Run = () => { };
+    Instances = Array<OriginalServer>();
 
-    constructor(instance: OriginalServer);
-    constructor(port?: number, protocol?: 'https' | 'http', options?: ServerOptions);
-    constructor(protocol?: 'https' | 'http', port?: number, options?: ServerOptions);
-    constructor(...args: unknown[])
-    {
-        let port = 8080;
-        let protocol = 'http';
-
-        this.Options = { maxContentSize: 1024 ** 2 };
-
-        if (args[0]) {
-            if (typeof args[0] == 'string') {
-                protocol = args[0];
-            }
-            else if (typeof args[0] == 'number') {
-                port = args[0];
-            }
-            else {
-                this.Instance = args[0] as OriginalServer;
-            }
-        }
-        if (args[1]) {
-            if (typeof args[1] == 'string') {
-                protocol = args[1];
-            }
-            else {
-                port = args[1] as number;
-            }
-        }
-        if (args[2]) {
-            this.Options = args[2] as ServerOptions;
-        }
-
-        const handleOrginalRequest = async (req: Request, res: Response) =>
-        {
-            //prepare vals
-            try {
-                req.RequestPath = decodeURI(req.url ?? '/');
-            } catch (error) {
-                req.socket.destroy();
-                return;
-            }
-
-            req.Address = ip.getClientIp(req) ?? 'unknown';
-
-            const size = parseInt(req.headers['content-length'] ?? '0');
-            if (size > this.Options.maxContentSize) {
-                req.socket.destroy();
-                return;
-            }
-
-            res = Response(res);
-
-            //iterate routers
-            for (const router of this.Routers) {
-
-                const results = req.RequestPath.match(router.expression);
-                // console.log(results);
-                
-                if (results) {
-                    if (results[1])
-                        req.ResolvedPath = results[1];
-                    try {
-                        await router.Handle(req, res);
-                    } catch (error) {
-                        res.End(404);
-                        break;
-                    }
-                }
-
-            }
-            
-            //No router handled this request, reject connection
-            if (!res.writableEnded)
-                res.End(404);
-
-
-        }
-
-        if (!this.Instance) {
-            const createServer = (protocol == 'http' ? createHttpServer : createHttpsServer) as typeof createHttpsServer;
-            this.Instance = createServer(this.Options);
-        }
-        this.Instance.on('request', handleOrginalRequest);
-
-
-        this.Run = () =>
-        {
-            //collect routers
-            for (const filter of GlobalRouter) {
-                const router = filter(this);
-                if (router) {
-                    this.Routers.push(router);
-                }
-            }
-            this.Routers.sort((lhs, rhs) => lhs.GetPriority() - rhs.GetPriority());
-            this.Instance?.listen(port);
-        }
-    }
+    constructor(public Options: ServerOptions = { maxContentSize: 1024 ** 2 }) { }
 
     Route(...router: Array<RouterBase>)
     {
@@ -154,6 +54,80 @@ export class WebServer
         this.Routers = MergeSortedArray(this.Routers, router, (lhs, rhs) => lhs.GetPriority() > rhs.GetPriority());
         return this;
     }
+
+    Run(protocol: 'http' | 'https' = 'http', port = 8080)
+    {
+        //collect routers
+        for (const filter of GlobalRouter) {
+            const router = filter(this);
+            if (router) {
+                this.Routers.push(router);
+            }
+        }
+        this.Routers.sort((lhs, rhs) => lhs.GetPriority() - rhs.GetPriority());
+        const createServer = (protocol == 'http' ? createHttpServer : createHttpsServer) as typeof createHttpsServer;
+        const instance = createServer(this.Options);
+        instance.on('request', this.HandleOrginalRequest.bind(this));
+        instance.listen(port);
+        this.Instances.push(instance);
+    }
+
+    Close()
+    {
+        for (const instance of this.Instances) {
+            instance.close();
+        }
+        this.Instances = new Array();
+    }
+
+    private async HandleOrginalRequest(req: Request, res: Response)
+    {
+        //prepare vals
+        try {
+            req.RequestPath = decodeURI(req.url ?? '/');
+        } catch (error) {
+            req.socket.destroy();
+            return;
+        }
+
+        req.Address = ip.getClientIp(req) ?? 'unknown';
+
+        const size = parseInt(req.headers['content-length'] ?? '0');
+        if (size > this.Options.maxContentSize) {
+            req.socket.destroy();
+            return;
+        }
+
+        res = Response(res);
+
+        //iterate routers
+        for (const router of this.Routers) {
+
+            const results = req.RequestPath.match(router.expression);
+            // console.log(results);
+
+            if (results) {
+                if (results[1])
+                    req.ResolvedPath = results[1];
+                try {
+                    await router.Handle(req, res);
+                } catch (error) {
+                    res.End(404);
+                    break;
+                }
+            }
+
+            //response.End() has been called, no need to iterate other routers.
+            if(res.writableEnded)
+            {
+                break;
+            }
+        }
+
+        //No router handled this request, reject connection
+        if (!res.writableEnded)
+            res.End(404);
+    };
 
 }
 
