@@ -1,5 +1,3 @@
-
-
 type ReturnType<T> = T extends (...args: never[]) => infer R ? R : unknown;
 type ParamsType<T> = T extends (...args: infer P) => unknown ? P : unknown;
 type AnyFunction<ParamTypes extends unknown[], ReturnType = unknown> = (...args: ParamTypes) => unknown;
