@@ -1,51 +1,58 @@
 
-import { Request, Response, RouterBase } from "./Core";
-import { DefineRouter, WebServer } from "./WebServer";
+import { LDRequest, LDResponse, RouterBase } from "./Core";
 import { CorsRouter, GetRouter, MultipartRouter, PostRouter, StaticRouter } from "./Routers";
-import { WatchChange } from "./Tools";
+import { MergeSortedArray, WatchChange } from "./Tools";
+import { DefineRouter, WebServer } from "./WebServer";
 
-@DefineRouter('/test/*')
-class TestRouter extends RouterBase
-{
-    Handle(request: Request, response: Response): Promise<void>
-    {
-        return new Promise((resolve, reject) =>
-        {
-            response.setHeader('Content-Type', 'text/html; charset=utf-8');
-            console.log('??');
-            
-            // response.End("???");
-            resolve();
-        });
-    }
-}
+// @DefineRouter('/test/*')
+// class TestRouter extends RouterBase
+// {
+//     Handle(request: LDRequest, response: LDResponse): Promise<void>
+//     {
+//         return new Promise((resolve, reject) =>
+//         {
+//             response.setHeader('Content-Type', 'text/html; charset=utf-8');
+//             // console.log('??');
 
-@DefineRouter('/test/*')
+//             // response.End("???");
+//             resolve();
+//         });
+//     }
+// }
+
+@DefineRouter('/test')
 class TestRouter2 extends RouterBase
 {
-    Handle(request: Request, response: Response): Promise<void>
+    Handle(request: LDRequest, response: LDResponse): Promise<void>
     {
         return new Promise(resolve =>
         {
-            // response.End('妈妈生的');
-            console.log(request.GetParams);
-            console.log(request.PostParams);
-            console.log(request.FormParams);
-
-            console.log(request.Files);
-            response.End();
+            response.setHeader('Set-Cookie', ['asd=ddsa', 'ddsa=1123']);
+            // console.log(request.GetParams, request.PostParams);
+            // console.log(request.headers.cookie);
+            response.End({
+                Matches: request.Matches,
+                GetParams: request.GetParams,
+                PostParams: request.PostParams,
+                FormParams: request.FormParams,
+                Files: request.Files,
+                code: '妈妈生的'
+            });
             resolve();
         });
     }
 }
 
 const server = new WebServer();
-server.Route(new CorsRouter('/*'),
-    new GetRouter('/test/*'),
+
+const routers = [
+    new CorsRouter('/*'),
+    new GetRouter('/*'),
     new PostRouter('/*'),
     // new MultipartRouter('/test/*'),
-    new StaticRouter('/res/*', './www')
-);
+    new StaticRouter('/res/*', './www')];
+
+server.Route(...routers);
 
 server.Run('http', 1887);
 WatchChange(__filename, async () =>

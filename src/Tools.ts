@@ -82,6 +82,11 @@ export function MergeSortedArray<Type>(lhs: Array<Type>, rhs: Array<Type>, great
     return lhs;
 }
 
+// export function MergeSortedArray<Type>(...arrs: Array<Array<Type>>)
+// {
+
+// }
+
 export function WatchChange(path: string, onChange: () => void)
 {
     (async () =>

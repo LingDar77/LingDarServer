@@ -1,11 +1,7 @@
-
 import { Server as HttpServer, createServer as createHttpServer } from 'http';
 import { Server as HttpsServer, ServerOptions as httpsServerOptions, createServer as createHttpsServer } from 'https';
 import { MergeSortedArray } from './Tools';
-import { RouterBase, Request, Response } from './Core';
-import ip from 'request-ip';
-
-
+import { RouterBase, LDRequest, LDResponse, WarpResponse, WarpRequest } from './Core';
 
 const GlobalRouter = new Array<(server: WebServer) => (RouterBase | null)>();
 
@@ -17,6 +13,12 @@ export type ServerOptions =
 
 export type OriginalServer = HttpServer | HttpsServer;
 
+/**
+ * Declare a global router class for a specular server, which should extend class RouterBase
+ * @param pattern specify the pattern recived for the router, that matches the request's path
+ * @param targetServer the target server that will apply this router, make sure the server is already created, or use a function to delay the process
+ * @returns 
+ */
 export function DefineRouter(pattern: RegExp | string, targetServer: WebServer | ((webServer: WebServer) => boolean) = () => true)
 {
     return <T extends { new(p: RegExp | string): RouterBase }>(constructor: T) =>
@@ -24,7 +26,7 @@ export function DefineRouter(pattern: RegExp | string, targetServer: WebServer |
         if (targetServer instanceof WebServer) {
             if (targetServer) {
                 //target server is already created
-                targetServer.Routers.push(new constructor(pattern));
+                targetServer.Route(new constructor(pattern));
             }
             else {
                 //target server is not instanced yet, add this router to global list
@@ -41,17 +43,48 @@ export function DefineRouter(pattern: RegExp | string, targetServer: WebServer |
 export class WebServer
 {
 
-    Routers = new Array<RouterBase>();
-    Instances = Array<OriginalServer>();
+    private Routers = new Array<RouterBase>();
+    private Instances = Array<OriginalServer>();
 
     constructor(public Options: ServerOptions = { maxContentSize: 1024 ** 2 }) { }
 
-    Route(...router: Array<RouterBase>)
+    Route(...routers: Array<RouterBase>)
     {
-        if (router.length > 1) {
-            router.sort((lhs, rhs) => lhs.GetPriority() - rhs.GetPriority());
+        if (routers.length) {
+            if (routers.length > 1) {
+                routers.sort((lhs, rhs) => lhs.GetPriority() - rhs.GetPriority());
+            }
+            this.Routers = MergeSortedArray(this.Routers, routers, (lhs, rhs) => lhs.GetPriority() > rhs.GetPriority());
         }
-        this.Routers = MergeSortedArray(this.Routers, router, (lhs, rhs) => lhs.GetPriority() > rhs.GetPriority());
+        return this;
+    }
+
+    Unroute(...routers: Array<RouterBase>)
+    {
+        if (routers.length > 1) {
+            routers.sort((lhs, rhs) => lhs.GetPriority() - rhs.GetPriority());
+        }
+
+        let lhs = 0, rhs = 0;
+        const result = new Array<RouterBase>();
+        while (rhs != routers.length) {
+            if (this.Routers[lhs] == routers[rhs]) {
+                console.log('?');
+                ++lhs;
+                ++rhs;
+            }
+            else {
+                console.log('!');
+
+                result.push(this.Routers[lhs]);
+                ++lhs;
+            }
+        }
+        while (lhs != this.Routers.length) {
+            result.push(this.Routers[lhs]);
+            ++lhs;
+        }
+        this.Routers = result;
         return this;
     }
 
@@ -70,6 +103,7 @@ export class WebServer
         instance.on('request', this.HandleOrginalRequest.bind(this));
         instance.listen(port);
         this.Instances.push(instance);
+        return this;
     }
 
     Close()
@@ -78,9 +112,10 @@ export class WebServer
             instance.close();
         }
         this.Instances = new Array();
+        return this;
     }
 
-    private async HandleOrginalRequest(req: Request, res: Response)
+    private async HandleOrginalRequest(req: LDRequest, res: LDResponse)
     {
         //prepare vals
         try {
@@ -90,21 +125,20 @@ export class WebServer
             return;
         }
 
-        req.Address = ip.getClientIp(req) ?? 'unknown';
-
         const size = parseInt(req.headers['content-length'] ?? '0');
         if (size > this.Options.maxContentSize) {
             req.socket.destroy();
             return;
         }
 
-        res = Response(res);
+        req = WarpRequest(req);
+        res = WarpResponse(res);
 
         //iterate routers
         for (const router of this.Routers) {
 
             const results = req.RequestPath.match(router.expression);
-            // console.log(results);
+            req.Matches = results;
 
             if (results) {
                 if (results[1])
@@ -118,8 +152,7 @@ export class WebServer
             }
 
             //response.End() has been called, no need to iterate other routers.
-            if(res.writableEnded)
-            {
+            if (res.writableEnded) {
                 break;
             }
         }

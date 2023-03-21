@@ -1,4 +1,4 @@
-import { Request, Response, RouterBase } from "./Core";
+import { LDRequest, LDResponse, RouterBase } from "./Core";
 import { LRUCache } from "./Tools";
 import { Types } from './ContentTypes';
 import { Stats } from "fs";
@@ -13,7 +13,7 @@ export class SecurityRouter extends RouterBase
     {
         return -2;
     }
-    Handle(request: Request, response: Response): Promise<void>
+    Handle(request: LDRequest, response: LDResponse): Promise<void>
     {
         return new Promise((resolve) =>
         {
@@ -35,7 +35,7 @@ export class CorsRouter extends RouterBase
     {
         return -2;
     }
-    Handle(request: Request, response: Response): Promise<void>
+    Handle(request: LDRequest, response: LDResponse): Promise<void>
     {
         return new Promise((resolve) =>
         {
@@ -56,25 +56,28 @@ export class GetRouter extends RouterBase
         return -1;
     }
 
-    Handle(request: Request, response: Response): Promise<void>
+    Handle(request: LDRequest, response: LDResponse): Promise<void>
     {
         return new Promise(resolve =>
         {
 
-            if (request.method == 'GET') {
+            if (request.Method == 'GET') {
                 //parse get parts
                 if (request.url) {
                     const results = request.url.match(/(.+)\?((?:[^=&]+=[^&]+&?)+)/);
                     if (results) {
                         //set get request
-                        request.RequestPath = results[1] == '/' ? '/' : results[1];
+                        request.RequestPath = results[1];
+
                         const params = results[2].split('&');
-                        if (params.length != 0) {
+                        if (params.length) {
                             request.GetParams = {};
                             for (const param of params) {
                                 if (param != '') {
-                                    const [key, val] = param.split('=');
-                                    request.GetParams[key] = val;
+                                    const pair = param.match(/(.+)=(.+)/);
+
+                                    if (pair?.length == 3)
+                                        request.GetParams[pair[1]] = pair[2];
                                 }
                             }
                         }
@@ -98,11 +101,11 @@ export class PostRouter extends RouterBase
         return -1;
     }
 
-    Handle(request: Request, response: Response): Promise<void>
+    Handle(request: LDRequest, response: LDResponse): Promise<void>
     {
         return new Promise((resolve, reject) =>
         {
-            if (request.method == 'POST' && !request.headers['content-type']?.match(/multipart/)) {
+            if (request.Method == 'POST' && !request.headers['content-type']?.match(/multipart/)) {
                 //handle post request
                 let buffer = Buffer.alloc(0);
                 request.on('data', (data: Buffer) =>
@@ -110,23 +113,28 @@ export class PostRouter extends RouterBase
                     buffer = Buffer.concat([buffer, data]);
                 });
 
-                request.on('end', () =>
+                request.once('end', () =>
                 {
                     try {
-                        const data = buffer.toString();
-                        // console.log(data);
-
-                        if (data != '') {
-                            const params = JSON.parse(data);
+                        if (buffer.byteLength) {
+                            const params = JSON.parse(buffer.toString());
                             if (params) {
                                 request.PostParams = params;
                             }
+                        }
+                        else {
+                            throw 'buffer length not valid';
                         }
                     } catch (error) {
                     }
                     finally {
                         resolve();
                     }
+                });
+
+                request.once('error', () =>
+                {
+                    resolve();
                 });
 
             }
@@ -146,11 +154,11 @@ export class MultipartRouter extends RouterBase
     {
         return -1;
     }
-    Handle(request: Request, response: Response): Promise<void>
+    Handle(request: LDRequest, response: LDResponse): Promise<void>
     {
         return new Promise((resolve, reject) =>
         {
-            if (request.method != 'POST') {
+            if (request.Method != 'POST') {
                 resolve();
                 return;
             }
@@ -265,11 +273,11 @@ export class StaticRouter extends RouterBase
         return 1;
     }
 
-    Handle(request: Request, response: Response): Promise<void>
+    Handle(request: LDRequest, response: LDResponse): Promise<void>
     {
         return new Promise(async resolve =>
         {
-            if (request.method != 'GET') {
+            if (request.Method != 'GET') {
                 resolve();
                 return;
             }

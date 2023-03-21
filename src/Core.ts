@@ -1,28 +1,30 @@
 import http from 'http';
-export type Request = RequestParams & http.IncomingMessage;
+export type LDRequest = RequestProperties & http.IncomingMessage;
 
-export interface RequestParams
+export interface RequestProperties
 {
+    method: 'POST' | 'GET' | string | undefined;
+    Matches: RegExpMatchArray | null;
     GetParams: { [x: string]: string };
     PostParams: { [x: string]: string };
     FormParams: { [x: string]: string };
     Files: { [x: string]: Buffer };
     RequestPath: string;
     ResolvedPath: string;
-    Address: string;
+    [OtherKey: string]: unknown;
+    // Cookies: Map<string, string>;
 }
 
-export type Response = http.ServerResponse &
-// {ended:boolean} &
+export type LDResponse = http.ServerResponse &
 { Write: (chunk: object | string | Buffer, encoding?: BufferEncoding) => boolean } &
 { Redirect: (url: string) => void } &
 { End: (message?: string | object | Buffer) => void } &
 { End: (code?: number) => void } &
 { End: (code?: number, message?: string | object | Buffer) => void }
 
-export function Response(res: http.ServerResponse)
+export function WarpResponse(res: http.ServerResponse)
 {
-    const response = res as Response;
+    const response = res as LDResponse;
 
     response.Write = (chunk: object | string | Buffer, encoding: BufferEncoding = 'utf-8') =>
     {
@@ -67,6 +69,14 @@ export function Response(res: http.ServerResponse)
     };
 
     return response;
+}
+
+export function WarpRequest(req: http.IncomingMessage)
+{
+
+    req.method = req.method?.toUpperCase();
+    return req as LDRequest;
+
 }
 
 /**
@@ -118,5 +128,5 @@ export abstract class RouterBase
      * @param request 
      * @param response 
      */
-    abstract Handle(request: Request, response: Response): Promise<void>;
+    abstract Handle(request: LDRequest, response: LDResponse): Promise<void>;
 }
