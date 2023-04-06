@@ -1,7 +1,7 @@
-import { LDRequest, LDResponse, RouterBase } from "./Core";
-import { LRUCache } from "./Tools";
+import { LDRequest, LDResponse, RouterBase } from './Core';
 import { Types } from './ContentTypes';
-import { Stats } from "fs";
+import { Stats } from 'fs';
+import { LRUCache } from 'lingdar-utils';
 
 /**
  * Security router is need to set policies configured to ensure security
@@ -61,7 +61,7 @@ export class GetRouter extends RouterBase
         return new Promise(resolve =>
         {
 
-            if (request.Method == 'GET') {
+            if (request.method == 'GET') {
                 //parse get parts
                 if (request.url) {
                     const results = request.url.match(/(.+)\?((?:[^=&]+=[^&]+&?)+)/);
@@ -77,7 +77,7 @@ export class GetRouter extends RouterBase
                                     const pair = param.match(/(.+)=(.+)/);
 
                                     if (pair?.length == 3)
-                                        request.GetParams[pair[1]] = pair[2];
+                                        request.GetParams[pair[1]] = decodeURIComponent(pair[2]);
                                 }
                             }
                         }
@@ -105,8 +105,10 @@ export class PostRouter extends RouterBase
     {
         return new Promise((resolve, reject) =>
         {
-            if (request.Method == 'POST' && !request.headers['content-type']?.match(/multipart/)) {
+
+            if (request.method == 'POST' && !request.headers['content-type']?.match(/multipart/)) {
                 //handle post request
+
                 let buffer = Buffer.alloc(0);
                 request.on('data', (data: Buffer) =>
                 {
@@ -158,7 +160,7 @@ export class MultipartRouter extends RouterBase
     {
         return new Promise((resolve, reject) =>
         {
-            if (request.Method != 'POST') {
+            if (request.method != 'POST') {
                 resolve();
                 return;
             }
@@ -235,11 +237,12 @@ export class StaticRouter extends RouterBase
     private Strategy: ECacheStrategy = ECacheStrategy.Auto;
     private MaxAge = 86400;
     private LimitedSize = 128 * 1024;
-    private Cache: LRUCache<string, { data: Buffer, timestamp: number }>;
-    constructor(partten: RegExp | string, private Dir: string, private MaxCacheNum = 16)
+    private static Cache: LRUCache<string, { data: Buffer, timestamp: number }>;
+    constructor(partten: RegExp | string, private Dir: string)
     {
         super(partten);
-        this.Cache = new LRUCache(MaxCacheNum);
+        if (!StaticRouter.Cache)
+            StaticRouter.Cache = new LRUCache();
         if (!Dir.endsWith('/')) {
             this.Dir = Dir + '/';
         }
@@ -277,7 +280,7 @@ export class StaticRouter extends RouterBase
     {
         return new Promise(async resolve =>
         {
-            if (request.Method != 'GET') {
+            if (request.method != 'GET') {
                 resolve();
                 return;
             }
@@ -311,31 +314,31 @@ export class StaticRouter extends RouterBase
                     }
 
                     switch (this.Strategy) {
-                        case ECacheStrategy.None:
-                            response.End(await this.GetFile(finnalPath, stat));
-                            break;
-                        case ECacheStrategy.LastModified:
-                            {
-                                const lastCache = request.headers['if-modified-since'];
-                                const current = stat.mtime.getTime();
-                                if (!lastCache || parseInt(lastCache) != current) {
-                                    response.setHeader('last-modified', current);
-                                    response.End(await this.GetFile(finnalPath, stat, true));
-                                }
-                                else {
-                                    response.statusCode = 304;
-                                    response.End();
-                                }
-                                break;
-                            }
-                        case ECacheStrategy.MaxAge:
-                            {
-                                response.setHeader('Cache-Control', 'public, max-age=' + this.MaxAge);
-                                response.End(await this.GetFile(finnalPath, stat, true));
-                                break;
-                            }
-                        default:
-                            break;
+                    case ECacheStrategy.None:
+                        response.End(await this.GetFile(finnalPath, stat));
+                        break;
+                    case ECacheStrategy.LastModified:
+                    {
+                        const lastCache = request.headers['if-modified-since'];
+                        const current = stat.mtime.getTime();
+                        if (!lastCache || parseInt(lastCache) != current) {
+                            response.setHeader('last-modified', current);
+                            response.End(await this.GetFile(finnalPath, stat, true));
+                        }
+                        else {
+                            response.statusCode = 304;
+                            response.End();
+                        }
+                        break;
+                    }
+                    case ECacheStrategy.MaxAge:
+                    {
+                        response.setHeader('Cache-Control', 'public, max-age=' + this.MaxAge);
+                        response.End(await this.GetFile(finnalPath, stat, true));
+                        break;
+                    }
+                    default:
+                        break;
                     }
 
 
@@ -345,6 +348,11 @@ export class StaticRouter extends RouterBase
             resolve();
 
         });
+    }
+
+    static get cache()
+    {
+        return StaticRouter.Cache;
     }
 
     /**
@@ -358,7 +366,7 @@ export class StaticRouter extends RouterBase
         return new Promise(async (resolve, reject) =>
         {
             if (!update) {
-                const cache = this.Cache.Get(path);
+                const cache = StaticRouter.Cache.Get(path);
                 if (cache) {
                     resolve(cache.data);
                     return;
@@ -369,10 +377,10 @@ export class StaticRouter extends RouterBase
                 //need update or cache miss
                 const fs = (await import('fs')).promises;
                 const data = await fs.readFile(path);
-                this.Cache.Set(path, { data, timestamp: stat.mtime.getTime() });
+                StaticRouter.Cache.Set(path, { data, timestamp: stat.mtime.getTime() });
                 resolve(data);
             } catch (error) {
-                reject(error)
+                reject(error);
             }
         });
 

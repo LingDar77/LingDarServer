@@ -3,7 +3,6 @@ export type LDRequest = RequestProperties & http.IncomingMessage;
 
 export interface RequestProperties
 {
-    method: 'POST' | 'GET' | string | undefined;
     Matches: RegExpMatchArray | null;
     GetParams: { [x: string]: string };
     PostParams: { [x: string]: string };

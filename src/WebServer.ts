@@ -1,18 +1,18 @@
 import { Server as HttpServer, createServer as createHttpServer } from 'http';
 import { Server as HttpsServer, ServerOptions as httpsServerOptions, createServer as createHttpsServer } from 'https';
-import { MergeSortedArray } from './Tools';
+import { Constructor, MergeSortedArray } from 'lingdar-utils';
 import { RouterBase, LDRequest, LDResponse, WarpResponse, WarpRequest } from './Core';
 
 const GlobalRouter = new Array<(server: WebServer) => (RouterBase | null)>();
 
 export type ServerOptions =
     {
-        maxContentSize: number
+        maxContentSize?: number,
+        maxConnectionTime?: number,
     }
     & httpsServerOptions
 
 export type OriginalServer = HttpServer | HttpsServer;
-
 /**
  * Declare a global router class for a specular server, which should extend class RouterBase
  * @param pattern specify the pattern recived for the router, that matches the request's path
@@ -21,7 +21,7 @@ export type OriginalServer = HttpServer | HttpsServer;
  */
 export function DefineRouter(pattern: RegExp | string, targetServer: WebServer | ((webServer: WebServer) => boolean) = () => true)
 {
-    return <T extends { new(p: RegExp | string): RouterBase }>(constructor: T) =>
+    return <T extends Constructor<RouterBase>>(constructor: T) =>
     {
         if (targetServer instanceof WebServer) {
             if (targetServer) {
@@ -39,14 +39,13 @@ export function DefineRouter(pattern: RegExp | string, targetServer: WebServer |
     };
 }
 
-
 export class WebServer
 {
 
     private Routers = new Array<RouterBase>();
     private Instances = Array<OriginalServer>();
 
-    constructor(public Options: ServerOptions = { maxContentSize: 1024 ** 2 }) { }
+    constructor(public Options: ServerOptions = { maxContentSize: 1024 ** 2, maxConnectionTime: 5000 }) { }
 
     Route(...routers: Array<RouterBase>)
     {
@@ -111,8 +110,19 @@ export class WebServer
         for (const instance of this.Instances) {
             instance.close();
         }
-        this.Instances = new Array();
+        this.Instances = [];
         return this;
+    }
+
+    GetRouters<T extends RouterBase>(constructor: Constructor<T>)
+    {
+        const result = new Array<RouterBase>();
+        for (const router of this.Routers) {
+            if (router.constructor == constructor) {
+                result.push(router);
+            }
+        }
+        return result as T[];
     }
 
     private async HandleOrginalRequest(req: LDRequest, res: LDResponse)
@@ -126,7 +136,9 @@ export class WebServer
         }
 
         const size = parseInt(req.headers['content-length'] ?? '0');
-        if (size > this.Options.maxContentSize) {
+        // console.log('incomming content size',size);
+
+        if (size > (this.Options.maxContentSize ?? 0)) {
             req.socket.destroy();
             return;
         }
@@ -160,7 +172,7 @@ export class WebServer
         //No router handled this request, reject connection
         if (!res.writableEnded)
             res.End(404);
-    };
+    }
 
 }
 
