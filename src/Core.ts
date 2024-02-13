@@ -5,8 +5,8 @@ export interface RequestProperties
 {
     Matches: RegExpMatchArray | null;
     GetParams: { [x: string]: string };
-    PostParams: { [x: string]: string };
-    FormParams: { [x: string]: string };
+    PostParams: { [x: string]: string | [] | object };
+    FormParams: { [x: string]: string | [] | object };
     Files: { [x: string]: Buffer };
     RequestPath: string;
     ResolvedPath: string;
